@@ -6,7 +6,7 @@ import { SidebarProvider } from "@/contexts/SidebarContext";
 export const ERPLayout = () => {
     return (
         <SidebarProvider>
-            <div className="min-h-screen flex bg-gray-100">
+            <div className="h-screen flex bg-gray-100 overflow-hidden">
                 {/* Sidebar */}
                 <Sidebar />
 

@@ -1,254 +1,270 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GenericModal } from "@/components/shared/GenericModal";
 import { HexColorPicker } from "react-colorful";
-import { X, Plus, Image as ImageIcon, Upload, Trash2, RefreshCw } from "lucide-react";
+import { X, Plus, Image as ImageIcon, Upload, Trash2, RefreshCw, ArrowLeft } from "lucide-react";
 import { sileo } from "sileo";
 
 import { useCategories } from "../hooks/useCategories";
 import { useBrands } from "../hooks/useBrands";
-import { useProducts } from "../hooks/useProducts";
 import { useSizes } from "../hooks/useSizes";
+import { getProductById, createProduct, updateProduct } from "../services/products.service";
+import type { Product, CreateProductDto } from "../types/Products.type";
 
 type ModalType = "categoria" | "marca" | "talla" | null;
 
 export const ProductsDashboard = () => {
-    // ── Categorías y Marcas ───────────────────────────────────
+    const location = useLocation();
+    const navigate  = useNavigate();
+    const editProductId: number | undefined = (location.state as { editProductId?: number })?.editProductId;
+    const isEdit = !!editProductId;
+
+    // ── Hooks de datos ────────────────────────────────────────────────────────
     const { categories, isLoadingCategories, addCategoryToAPI } = useCategories();
-    const { brands, isLoadingBrands, addBrandToAPI } = useBrands();
-    const { sizes, isLoadingSizes, addSizeToAPI } = useSizes();
-    const { isSavingProduct, addProductToAPI } = useProducts();
+    const { brands, isLoadingBrands, addBrandToAPI }             = useBrands();
+    const { sizes, isLoadingSizes, addSizeToAPI }                 = useSizes();
 
+    // ── Estado del formulario ─────────────────────────────────────────────────
+    const [isSaving, setIsSaving]         = useState(false);
+    const [isLoadingProduct, setIsLoadingProduct] = useState(isEdit);
+
+    const [nombre, setNombre]             = useState("");
+    const [precio, setPrecio]             = useState("");
+    const [sku, setSku]                   = useState("");
+    const [descripcion, setDescripcion]   = useState("");
     const [selectedCategory, setSelectedCategory] = useState("");
-    const [selectedBrand, setSelectedBrand] = useState("");
+    const [selectedBrand, setSelectedBrand]       = useState("");
+    const [aplicaDescuento, setAplicaDescuento]   = useState(false);
+    const [tipoDesc, setTipoDesc]         = useState<"PORCENTAJE" | "VALOR_FIJO">("PORCENTAJE");
+    const [valorDesc, setValorDesc]       = useState("");
+    const [selectedColors, setSelectedColors] = useState<string[]>([]);
+    const [currentColor, setCurrentColor] = useState("#6366f1");
+    const [selectedTallas, setSelectedTallas] = useState<string[]>([]);
+    const [imagenes, setImagenes]         = useState<(string | null)[]>([null, null, null, null]);
 
-    // ── Campos del formulario ─────────────────────────────────
-    const [nombre, setNombre] = useState("");
-    const [precio, setPrecio] = useState("");
-    const [cantidad, setCantidad] = useState("");
-    const [sku, setSku] = useState("");
-    const [descuento, setDescuento] = useState(0);
-    const [valorDescuento, setValorDescuento] = useState("");
-    const [descripcion, setDescripcion] = useState("");
+    // ── Quick-add modal ───────────────────────────────────────────────────────
+    const [modalType, setModalType]       = useState<ModalType>(null);
+    const [newItemName, setNewItemName]   = useState("");
+    const [isSavingItem, setIsSavingItem] = useState(false);
 
-    const generateSku = () => {
-        const randomNum = Math.floor(10000000 + Math.random() * 90000000);
-        setSku(randomNum.toString());
+    // ── Cargar producto en modo edición ───────────────────────────────────────
+    useEffect(() => {
+        if (!editProductId) return;
+        const load = async () => {
+            setIsLoadingProduct(true);
+            try {
+                const p: Product = await getProductById(editProductId);
+                setNombre(p.nombre);
+                setPrecio(String(p.precio));
+                setSku(p.sku ?? "");
+                setDescripcion(p.descripcion ?? "");
+                setSelectedCategory(p.categoria ? String(p.categoria.id) : "");
+                setSelectedBrand(p.marca ? String(p.marca.id) : "");
+                if (p.tipoDescuento !== "SIN_DESCUENTO") {
+                    setAplicaDescuento(true);
+                    setTipoDesc(p.tipoDescuento === "VALOR_FIJO" ? "VALOR_FIJO" : "PORCENTAJE");
+                    setValorDesc(String(p.valorDescuento));
+                }
+                setSelectedColors(p.colores?.map(c => c.nombre) ?? []);
+                setSelectedTallas(p.tallas?.map(t => t.nombre) ?? []);
+                const slots: (string | null)[] = [null, null, null, null];
+                (p.imagenes ?? []).slice(0, 4).forEach((url, i) => { slots[i] = url; });
+                setImagenes(slots);
+            } catch {
+                sileo.error({ title: "Error", description: "No se pudo cargar el producto." });
+                navigate("/admin/inventory");
+            } finally {
+                setIsLoadingProduct(false);
+            }
+        };
+        load();
+    }, [editProductId]);
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    const resetForm = () => {
+        setNombre(""); setPrecio(""); setSku(""); setDescripcion("");
+        setSelectedCategory(""); setSelectedBrand("");
+        setAplicaDescuento(false); setTipoDesc("PORCENTAJE"); setValorDesc("");
+        setSelectedColors([]); setSelectedTallas([]);
+        setImagenes([null, null, null, null]);
     };
 
-    // ── Modal "Añadir nueva" ──────────────────────────────────
-    const [modalType, setModalType] = useState<ModalType>(null);
-    const [newItemName, setNewItemName] = useState("");
-    const [isSavingNewItem, setIsSavingNewItem] = useState(false);
-
-    const openModal = (type: ModalType) => {
-        setNewItemName("");
-        setModalType(type);
-    };
+    const openModal = (type: ModalType) => { setNewItemName(""); setModalType(type); };
 
     const handleAddNew = async () => {
         if (!newItemName.trim()) return;
-        setIsSavingNewItem(true);
-
+        setIsSavingItem(true);
         const label = newItemName.trim();
-
         if (modalType === "categoria") {
-            const newCategory = await addCategoryToAPI(label);
-            if (newCategory) {
-                setSelectedCategory(newCategory.value);
-                setModalType(null);
-                sileo.success({ title: 'Éxito', description: 'Categoría guardada correctamente.' });
-            } else {
-                sileo.error({ title: 'Error', description: 'Hubo un error al guardar la categoría.' });
-            }
+            const opt = await addCategoryToAPI(label);
+            if (opt) { setSelectedCategory(opt.value); setModalType(null); sileo.success({ title: "Éxito", description: "Categoría guardada." }); }
+            else sileo.error({ title: "Error", description: "No se pudo guardar la categoría." });
         } else if (modalType === "marca") {
-            const newBrand = await addBrandToAPI(label);
-            if (newBrand) {
-                setSelectedBrand(newBrand.value);
-                setModalType(null);
-                sileo.success({ title: 'Éxito', description: 'Marca guardada correctamente.' });
-            } else {
-                sileo.error({ title: 'Error', description: 'Hubo un error al guardar la marca.' });
-            }
+            const opt = await addBrandToAPI(label);
+            if (opt) { setSelectedBrand(opt.value); setModalType(null); sileo.success({ title: "Éxito", description: "Marca guardada." }); }
+            else sileo.error({ title: "Error", description: "No se pudo guardar la marca." });
         } else if (modalType === "talla") {
-            const newSize = await addSizeToAPI(label);
-            if (newSize) {
-                if (!selectedTallas.includes(newSize.label)) {
-                    setSelectedTallas([...selectedTallas, newSize.label]);
-                }
+            const opt = await addSizeToAPI(label);
+            if (opt) {
+                if (!selectedTallas.includes(opt.label)) setSelectedTallas(prev => [...prev, opt.label]);
                 setModalType(null);
-                sileo.success({ title: 'Éxito', description: 'Talla guardada correctamente.' });
-            } else {
-                sileo.error({ title: 'Error', description: 'Hubo un error al guardar la talla.' });
-            }
+                sileo.success({ title: "Éxito", description: "Talla guardada." });
+            } else sileo.error({ title: "Error", description: "No se pudo guardar la talla." });
         }
-
-        setIsSavingNewItem(false);
+        setIsSavingItem(false);
     };
 
-    // ── Colores ───────────────────────────────────────────────
-    const [currentColor, setCurrentColor] = useState("#6366f1");
-    const [selectedColors, setSelectedColors] = useState<string[]>([]);
+    const handleSelectChange = (value: string, type: "categoria" | "marca" | "talla") => {
+        if (value === "nueva") { openModal(type); return; }
+        if (type === "categoria") setSelectedCategory(value);
+        else if (type === "marca") setSelectedBrand(value);
+        else if (type === "talla" && !selectedTallas.includes(value))
+            setSelectedTallas(prev => [...prev, value]);
+    };
+
+    const toggleTalla = (label: string) =>
+        setSelectedTallas(prev => prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]);
 
     const addColor = () => {
-        if (!selectedColors.includes(currentColor))
-            setSelectedColors([...selectedColors, currentColor]);
+        if (!selectedColors.includes(currentColor)) setSelectedColors(prev => [...prev, currentColor]);
     };
-    const removeColor = (c: string) => setSelectedColors(selectedColors.filter((x) => x !== c));
-
-    // ── Imágenes ──────────────────────────────────────────────
-    const [imagenes, setImagenes] = useState<(string | null)[]>([null, null, null, null]);
 
     const handleImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const newImagenes = [...imagenes];
-                newImagenes[index] = reader.result as string;
-                setImagenes(newImagenes);
-            };
-            reader.readAsDataURL(file);
-        }
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImagenes(prev => { const next = [...prev]; next[index] = reader.result as string; return next; });
+        };
+        reader.readAsDataURL(file);
     };
 
-    const removeImage = (index: number) => {
-        const newImagenes = [...imagenes];
-        newImagenes[index] = null;
-        setImagenes(newImagenes);
-    };
-
-
-    // ── Tallas ────────────────────────────────────────────────
-    const [selectedTallas, setSelectedTallas] = useState<string[]>([]);
-
-    const removeTalla = (t: string) => setSelectedTallas(selectedTallas.filter((x) => x !== t));
-
-    // ── Handler para los Selects ──────────────────────────────
-    const handleSelectChange = (value: string, type: "categoria" | "marca" | "talla") => {
-        if (value === "nueva") {
-            openModal(type);
-            return;
-        }
-        if (type === "categoria") setSelectedCategory(value);
-        else if (type === "marca") setSelectedBrand(value);
-        else if (type === "talla") {
-            if (!selectedTallas.includes(value)) {
-                setSelectedTallas([...selectedTallas, value]);
-            }
-        }
-    };
-
-    // ── Submit del producto ───────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!nombre.trim() || !precio || !cantidad || !selectedCategory || !selectedBrand) {
-            sileo.warning({ title: 'Completar datos', description: 'Por favor completa todos los campos obligatorios.' });
+        if (!nombre.trim() || !precio || !selectedCategory || !selectedBrand) {
+            sileo.warning({ title: "Completar datos", description: "Nombre, precio, categoría y marca son obligatorios." });
             return;
         }
-
-        const newProduct = await addProductToAPI({
-            nombre: nombre.trim(),
-            precio: parseFloat(precio),
-            cantidad: parseInt(cantidad, 10),
-            categoriaId: parseInt(selectedCategory, 10),
-            marcaId: parseInt(selectedBrand, 10),
-            color: selectedColors,
-            tallas: selectedTallas,
-            imagenes: imagenes.filter(img => img !== null) as string[],
-            sku: sku.trim(),
-            descripcion: descripcion.trim(),
-            descuento,
-            valorDescuento: descuento === 1 ? parseFloat(valorDescuento) || 0 : 0,
-        });
-
-        if (newProduct) {
-            sileo.success({ title: 'Éxito', description: `Producto "${newProduct.nombre}" guardado exitosamente.` });
-            setNombre("");
-            setPrecio("");
-            setCantidad("");
-            setSelectedCategory("");
-            setSelectedBrand("");
-            setSelectedColors([]);
-            setSelectedTallas([]);
-            setImagenes([null, null, null, null]);
-            setSku("");
-            setDescuento(0);
-            setValorDescuento("");
-            setDescripcion("");
-        } else {
-            sileo.error({ title: 'Error', description: 'Hubo un error al guardar el producto. Revisa la consola.' });
+        const dto: CreateProductDto = {
+            nombre:         nombre.trim(),
+            precio:         parseFloat(precio),
+            categoriaId:    parseInt(selectedCategory, 10),
+            marcaId:        parseInt(selectedBrand, 10),
+            estado:         "ACTIVO",
+            color:          selectedColors.length > 0 ? selectedColors : undefined,
+            tallas:         selectedTallas.length > 0 ? selectedTallas : undefined,
+            imagenes:       imagenes.filter(Boolean) as string[],
+            sku:            sku.trim() || undefined,
+            descripcion:    descripcion.trim() || undefined,
+            tipoDescuento:  aplicaDescuento ? tipoDesc : "SIN_DESCUENTO",
+            valorDescuento: aplicaDescuento ? parseFloat(valorDesc) || 0 : 0,
+        };
+        setIsSaving(true);
+        try {
+            if (isEdit && editProductId) {
+                await updateProduct(editProductId, dto);
+                sileo.success({ title: "Éxito", description: `"${dto.nombre}" actualizado correctamente.` });
+                navigate("/admin/inventory");
+            } else {
+                await createProduct(dto);
+                sileo.success({ title: "Éxito", description: `"${dto.nombre}" creado exitosamente.` });
+                resetForm();
+            }
+        } catch {
+            sileo.error({ title: "Error", description: isEdit ? "No se pudo actualizar el producto." : "No se pudo crear el producto." });
+        } finally {
+            setIsSaving(false);
         }
     };
+
+    // ── Spinner mientras carga producto en edición ────────────────────────────
+    if (isLoadingProduct) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-sm text-slate-500">Cargando producto...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full">
-            <div className="px-6 pt-1 pb-0 shrink-0">
-                <PageHeader 
-                    title="Nuevo Producto" 
-                    description="Crea y organiza el catálogo de tu tienda."
-                />
+            {/* ── Header ── */}
+            <div className="px-1 pt-1 pb-4 shrink-0 flex items-center gap-3">
+                {isEdit ? (
+                    <button
+                        onClick={() => navigate("/admin/inventory")}
+                        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Volver a Inventario
+                    </button>
+                ) : (
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">Nuevo Producto</h2>
+                        <p className="text-sm text-slate-500 mt-0.5">Crea y organiza el catálogo de tu tienda.</p>
+                    </div>
+                )}
+                {isEdit && (
+                    <>
+                        <span className="text-slate-300">/</span>
+                        <h2 className="text-lg font-bold text-slate-800">Editar producto</h2>
+                    </>
+                )}
             </div>
 
-            {/* ── Modal añadir categoría / marca / talla ── */}
+            {/* ── Quick-add modal ── */}
             <GenericModal
                 isOpen={modalType !== null}
-                onOpenChange={(open) => !open && setModalType(null)}
+                onOpenChange={open => !open && setModalType(null)}
                 title={modalType === "categoria" ? "Nueva Categoría" : modalType === "marca" ? "Nueva Marca" : "Nueva Talla"}
-                description={
-                    modalType === "categoria"
-                        ? "Escribe el nombre de la nueva categoría. Se añadirá al listado de opciones."
-                        : modalType === "marca"
-                            ? "Escribe el nombre de la nueva marca. Se añadirá al listado de opciones."
-                            : "Escribe el nombre o número de la nueva talla (ej. XXL, 42). Se añadirá al listado."
-                }
+                description="Se añadirá al listado de opciones disponibles."
                 footer={
                     <>
-                        <Button variant="outline" onClick={() => setModalType(null)} disabled={isSavingNewItem}>Cancelar</Button>
-                        <Button onClick={handleAddNew} disabled={!newItemName.trim() || isSavingNewItem}>
-                            {isSavingNewItem ? "Guardando..." : "Añadir"}
+                        <Button variant="outline" onClick={() => setModalType(null)} disabled={isSavingItem}>Cancelar</Button>
+                        <Button onClick={handleAddNew} disabled={!newItemName.trim() || isSavingItem}>
+                            {isSavingItem ? "Guardando..." : "Añadir"}
                         </Button>
                     </>
                 }
             >
                 <div className="space-y-2">
                     <Label htmlFor="new-item">
-                        {modalType === "categoria" ? "Nombre de la categoría" : modalType === "marca" ? "Nombre de la marca" : "Nombre de la talla"}
+                        {modalType === "categoria" ? "Nombre de la categoría" : modalType === "marca" ? "Nombre de la marca" : "Nombre o número (ej. XL, 42)"}
                     </Label>
                     <Input
                         id="new-item"
                         placeholder={modalType === "categoria" ? "Ej. Ropa Interior" : modalType === "marca" ? "Ej. Puma" : "Ej. XL"}
                         value={newItemName}
-                        onChange={(e) => setNewItemName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleAddNew()}
+                        onChange={e => setNewItemName(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleAddNew()}
                         autoFocus
                     />
                 </div>
             </GenericModal>
 
+            {/* ── Formulario ── */}
             <form className="flex-1 flex flex-col min-h-0" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1 min-h-0">
 
-                    {/* ── Columna izquierda: Información ────────── */}
+                    {/* Columna izquierda */}
                     <Card className="flex flex-col min-h-0">
                         <CardHeader className="shrink-0">
                             <CardTitle>Información del Producto</CardTitle>
                             <CardDescription>Campos principales del artículo.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-4 overflow-y-auto flex-1">
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Nombre del Producto</Label>
@@ -256,25 +272,22 @@ export const ProductsDashboard = () => {
                                         id="name"
                                         placeholder="Ej. Terno de Lino Fino"
                                         value={nombre}
-                                        onChange={(e) => setNombre(e.target.value)}
+                                        onChange={e => setNombre(e.target.value)}
                                     />
                                 </div>
-
                                 <div className="space-y-2">
-                                    <Label htmlFor="sku">SKU (Código del Producto)</Label>
+                                    <Label htmlFor="sku">SKU</Label>
                                     <div className="flex gap-2">
                                         <Input
                                             id="sku"
                                             placeholder="Ej. 10361229"
                                             value={sku}
-                                            onChange={(e) => setSku(e.target.value)}
+                                            onChange={e => setSku(e.target.value)}
                                         />
-                                        <Button 
-                                            type="button" 
-                                            variant="outline" 
-                                            size="icon" 
-                                            onClick={generateSku}
-                                            title="Generar SKU automático"
+                                        <Button
+                                            type="button" variant="outline" size="icon"
+                                            onClick={() => setSku(String(Math.floor(10000000 + Math.random() * 90000000)))}
+                                            title="Generar SKU"
                                         >
                                             <RefreshCw className="w-4 h-4" />
                                         </Button>
@@ -282,98 +295,84 @@ export const ProductsDashboard = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-[2fr_2fr_1fr] gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Categoría</Label>
-                                    <Select value={selectedCategory} onValueChange={(v) => handleSelectChange(v, "categoria")} disabled={isLoadingCategories}>
-                                        <SelectTrigger id="category">
-                                            <SelectValue placeholder={isLoadingCategories ? "Cargando categorías..." : "Selecciona una..."} />
+                                    <Select value={selectedCategory} onValueChange={v => handleSelectChange(v, "categoria")} disabled={isLoadingCategories}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={isLoadingCategories ? "Cargando..." : "Selecciona una..."} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {categories.map((cat) => (
+                                            {categories.map(cat => (
                                                 <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                                             ))}
-                                            <SelectItem value="nueva" className="text-primary font-semibold border-t mt-1">
-                                                + Añadir nueva...
-                                            </SelectItem>
+                                            <SelectItem value="nueva" className="text-primary font-semibold border-t mt-1">+ Añadir nueva...</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Marca</Label>
-                                    <Select value={selectedBrand} onValueChange={(v) => handleSelectChange(v, "marca")} disabled={isLoadingBrands}>
-                                        <SelectTrigger id="brand">
-                                            <SelectValue placeholder={isLoadingBrands ? "Cargando marcas..." : "Selecciona una..."} />
+                                    <Select value={selectedBrand} onValueChange={v => handleSelectChange(v, "marca")} disabled={isLoadingBrands}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={isLoadingBrands ? "Cargando..." : "Selecciona una..."} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {brands.map((b) => (
+                                            {brands.map(b => (
                                                 <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
                                             ))}
-                                            <SelectItem value="nueva" className="text-primary font-semibold border-t mt-1">
-                                                + Añadir nueva...
-                                            </SelectItem>
+                                            <SelectItem value="nueva" className="text-primary font-semibold border-t mt-1">+ Añadir nueva...</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="quantity">Cantidad Inicial</Label>
-                                    <Input
-                                        id="quantity"
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        placeholder="Ej. 100"
-                                        value={cantidad}
-                                        onChange={(e) => setCantidad(e.target.value)}
-                                    />
-                                </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                                 <div className="space-y-2">
-                                    <Label htmlFor="price">Precio Base (Referencial)</Label>
+                                    <Label htmlFor="price">Precio Base (S/)</Label>
                                     <Input
                                         id="price"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
+                                        type="number" min="0" step="0.01"
                                         placeholder="Ej. 99.99"
                                         value={precio}
-                                        onChange={(e) => setPrecio(e.target.value)}
-                                        className="h-10"
+                                        onChange={e => setPrecio(e.target.value)}
                                     />
                                 </div>
-
                                 <div className="space-y-2">
-                                    <Label>¿Aplicar Descuento?</Label>
+                                    <Label>Descuento</Label>
                                     <div className="flex items-center gap-3 h-10">
                                         <button
                                             type="button"
-                                            onClick={() => setDescuento(descuento === 1 ? 0 : 1)}
-                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${descuento === 1 ? "bg-primary" : "bg-slate-200"}`}
+                                            onClick={() => setAplicaDescuento(v => !v)}
+                                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors ${aplicaDescuento ? "bg-primary" : "bg-slate-200"}`}
                                         >
-                                            <span
-                                                className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform ${descuento === 1 ? "translate-x-6" : "translate-x-1"}`}
-                                            />
+                                            <span className={`block h-4 w-4 rounded-full bg-white shadow-lg transition-transform ${aplicaDescuento ? "translate-x-6" : "translate-x-1"}`} />
                                         </button>
-                                        
-                                        <span className="text-sm text-slate-600 font-medium min-w-[70px]">
-                                            {descuento === 1 ? "Valor:" : "Inactivo"}
-                                        </span>
-                                        
-                                        {descuento === 1 && (
-                                            <div className="flex-1 max-w-[120px] relative animate-in fade-in slide-in-from-left-2">
-                                                <Input
-                                                    id="discount"
-                                                    type="number"
-                                                    min="0"
-                                                    max="100"
-                                                    placeholder="%"
-                                                    value={valorDescuento}
-                                                    onChange={(e) => setValorDescuento(e.target.value)}
-                                                    className="h-10 pr-7 text-sm"
-                                                />
-                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">%</span>
+                                        {!aplicaDescuento && <span className="text-sm text-slate-400">Sin descuento</span>}
+                                        {aplicaDescuento && (
+                                            <div className="flex items-center gap-2">
+                                                <Select value={tipoDesc} onValueChange={v => setTipoDesc(v as "PORCENTAJE" | "VALOR_FIJO")}>
+                                                    <SelectTrigger className="h-10 w-36 text-sm"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="PORCENTAJE">Porcentaje (%)</SelectItem>
+                                                        <SelectItem value="VALOR_FIJO">Valor fijo (S/)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="relative w-24">
+                                                    {tipoDesc === "VALOR_FIJO" && (
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">S/</span>
+                                                    )}
+                                                    <Input
+                                                        type="number" min="0"
+                                                        max={tipoDesc === "PORCENTAJE" ? 100 : undefined}
+                                                        placeholder="0"
+                                                        value={valorDesc}
+                                                        onChange={e => setValorDesc(e.target.value)}
+                                                        className={`h-10 text-sm ${tipoDesc === "PORCENTAJE" ? "pr-6" : "pl-7"}`}
+                                                    />
+                                                    {tipoDesc === "PORCENTAJE" && (
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -381,66 +380,56 @@ export const ProductsDashboard = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="description">Descripción Detallada</Label>
+                                <Label htmlFor="description">Descripción</Label>
                                 <Textarea
                                     id="description"
-                                    placeholder="Detalla los materiales, estilo, corte y características de la prenda..."
-                                    className="resize-none h-28 overflow-y-auto"
+                                    placeholder="Detalla materiales, estilo, corte y características..."
+                                    className="resize-none h-24"
                                     value={descripcion}
-                                    onChange={(e) => setDescripcion(e.target.value)}
+                                    onChange={e => setDescripcion(e.target.value)}
                                 />
                             </div>
 
-                            <div className="pt-6 border-t mt-2">
-                                {/* Tallas */}
-                                <div className="space-y-3">
-                                    <Label className="text-base font-semibold">Tallas Disponibles</Label>
-                                    <p className="text-sm text-slate-500 mb-3 block">Tallas en las que se ofrece este producto.</p>
-                                    {isLoadingSizes ? (
-                                        <div className="flex items-center justify-center p-4">
-                                            <p className="text-sm text-slate-500">Cargando tallas...</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                            {sizes.map((s) => {
-                                                const isSelected = selectedTallas.includes(s.label);
-                                                return (
-                                                    <button
-                                                        key={s.value}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (isSelected) {
-                                                                removeTalla(s.label);
-                                                            } else {
-                                                                handleSelectChange(s.label, "talla");
-                                                            }
-                                                        }}
-                                                        className={`px-4 py-2 rounded-full border text-sm font-semibold transition-all duration-200 ${isSelected
-                                                            ? "bg-slate-900 text-white border-slate-900 shadow-md transform scale-105"
-                                                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:bg-slate-50"
-                                                            }`}
-                                                    >
-                                                        {s.label}
-                                                    </button>
-                                                );
-                                            })}
-                                            <button
-                                                type="button"
-                                                onClick={() => openModal("talla")}
-                                                className="px-4 py-2 rounded-full border border-dashed border-slate-300 text-sm font-semibold text-slate-500 hover:border-primary hover:text-primary transition-colors flex items-center justify-center bg-slate-50"
-                                            >
-                                                <Plus className="w-4 h-4 mr-1" /> Nueva
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+                            {/* Tallas */}
+                            <div className="pt-4 border-t space-y-3">
+                                <Label className="text-base font-semibold">Tallas Disponibles</Label>
+                                {isLoadingSizes ? (
+                                    <p className="text-sm text-slate-500">Cargando tallas...</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {sizes.map(s => {
+                                            const isSelected = selectedTallas.includes(s.label);
+                                            return (
+                                                <button
+                                                    key={s.value}
+                                                    type="button"
+                                                    onClick={() => toggleTalla(s.label)}
+                                                    className={`px-4 py-2 rounded-full border text-sm font-semibold transition-all ${
+                                                        isSelected
+                                                            ? "bg-slate-900 text-white border-slate-900 shadow-md scale-105"
+                                                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                                                    }`}
+                                                >
+                                                    {s.label}
+                                                </button>
+                                            );
+                                        })}
+                                        <button
+                                            type="button"
+                                            onClick={() => openModal("talla")}
+                                            className="px-4 py-2 rounded-full border border-dashed border-slate-300 text-sm font-semibold text-slate-500 hover:border-primary hover:text-primary transition-colors flex items-center bg-slate-50"
+                                        >
+                                            <Plus className="w-4 h-4 mr-1" /> Nueva
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* ── Columna derecha: Colores ────── */}
+                    {/* Columna derecha */}
                     <div className="flex flex-col gap-6 min-h-0">
-                        {/* Paleta de Colores */}
+                        {/* Colores */}
                         <Card className="shrink-0">
                             <CardHeader className="shrink-0 pb-3">
                                 <CardTitle>Paleta de Colores</CardTitle>
@@ -451,7 +440,7 @@ export const ProductsDashboard = () => {
                                     <div className="flex flex-col items-center gap-2 shrink-0">
                                         <HexColorPicker color={currentColor} onChange={setCurrentColor} style={{ width: "140px", height: "120px" }} />
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded border border-slate-200 shadow-sm" style={{ backgroundColor: currentColor }} />
+                                            <div className="w-6 h-6 rounded border border-slate-200" style={{ backgroundColor: currentColor }} />
                                             <span className="text-xs font-mono text-slate-600">{currentColor.toUpperCase()}</span>
                                         </div>
                                         <Button type="button" size="sm" className="w-full" onClick={addColor}>
@@ -461,14 +450,22 @@ export const ProductsDashboard = () => {
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-medium text-slate-500 mb-2">Seleccionados ({selectedColors.length})</p>
                                         {selectedColors.length === 0 ? (
-                                            <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-slate-200"><p className="text-xs text-slate-400">Sin colores</p></div>
+                                            <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-slate-200">
+                                                <p className="text-xs text-slate-400">Sin colores</p>
+                                            </div>
                                         ) : (
                                             <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                                                {selectedColors.map((color) => (
+                                                {selectedColors.map(color => (
                                                     <div key={color} className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5">
-                                                        <div className="w-3.5 h-3.5 rounded-sm border border-slate-200 shrink-0" style={{ backgroundColor: color }} />
+                                                        <div className="w-3.5 h-3.5 rounded-sm border border-slate-200" style={{ backgroundColor: color }} />
                                                         <span className="text-xs font-mono">{color.toUpperCase()}</span>
-                                                        <button type="button" onClick={() => removeColor(color)} className="text-slate-400 hover:text-red-500 transition-colors"><X className="w-2.5 h-2.5" /></button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedColors(prev => prev.filter(c => c !== color))}
+                                                            className="text-slate-400 hover:text-red-500"
+                                                        >
+                                                            <X className="w-2.5 h-2.5" />
+                                                        </button>
                                                     </div>
                                                 ))}
                                             </div>
@@ -478,47 +475,45 @@ export const ProductsDashboard = () => {
                             </CardContent>
                         </Card>
 
-                        {/* Imágenes del Producto */}
+                        {/* Imágenes */}
                         <Card className="flex-1 min-h-0">
                             <CardHeader className="shrink-0 pb-3">
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <ImageIcon className="w-5 h-5 text-primary" />
                                     Imágenes del Producto
                                 </CardTitle>
-                                <CardDescription>Sube hasta 4 imágenes para mostrar el producto.</CardDescription>
+                                <CardDescription>Sube hasta 4 imágenes.</CardDescription>
                             </CardHeader>
                             <CardContent className="pb-6">
                                 <div className="grid grid-cols-4 gap-3">
-                                    {[0, 1, 2, 3].map((index) => (
+                                    {[0, 1, 2, 3].map(index => (
                                         <div key={index} className="relative group aspect-square">
                                             {imagenes[index] ? (
                                                 <div className="w-full h-full rounded-xl overflow-hidden border-2 border-slate-100 shadow-sm relative">
-                                                    <img 
-                                                        src={imagenes[index] as string} 
-                                                        alt={`Producto ${index + 1}`} 
+                                                    <img
+                                                        src={imagenes[index] as string}
+                                                        alt={`Producto ${index + 1}`}
                                                         className="w-full h-full object-cover"
                                                     />
                                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <button 
+                                                        <button
                                                             type="button"
-                                                            onClick={() => removeImage(index)}
-                                                            className="p-1.5 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-sm transition-colors"
+                                                            onClick={() => setImagenes(prev => { const n = [...prev]; n[index] = null; return n; })}
+                                                            className="p-1.5 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-sm"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <label className="w-full h-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-primary/50 transition-all cursor-pointer group/label">
-                                                    <div className="p-2 rounded-full bg-white shadow-sm group-hover/label:scale-105 transition-transform">
-                                                        <Upload className="w-4 h-4 text-slate-400 group-hover/label:text-primary" />
-                                                    </div>
-                                                    <span className="mt-1 text-[10px] font-medium text-slate-500 group-hover/label:text-primary">Subir</span>
-                                                    <input 
-                                                        type="file" 
-                                                        className="hidden" 
+                                                <label className="w-full h-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-primary/50 transition-all cursor-pointer">
+                                                    <Upload className="w-4 h-4 text-slate-400" />
+                                                    <span className="mt-1 text-[10px] font-medium text-slate-500">Subir</span>
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
                                                         accept="image/*"
-                                                        onChange={(e) => handleImageChange(index, e)}
+                                                        onChange={e => handleImageChange(index, e)}
                                                     />
                                                 </label>
                                             )}
@@ -530,11 +525,18 @@ export const ProductsDashboard = () => {
                     </div>
                 </div>
 
-                {/* Botones */}
+                {/* Botones de acción */}
                 <div className="flex justify-end gap-3 pt-4 mt-2 border-t shrink-0">
-                    <Button type="button" variant="outline" disabled={isSavingProduct}>Cancelar</Button>
-                    <Button type="submit" disabled={isSavingProduct}>
-                        {isSavingProduct ? "Guardando..." : "Guardar Producto"}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isSaving}
+                        onClick={isEdit ? () => navigate("/admin/inventory") : resetForm}
+                    >
+                        {isEdit ? "Cancelar" : "Limpiar"}
+                    </Button>
+                    <Button type="submit" disabled={isSaving}>
+                        {isSaving ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear Producto"}
                     </Button>
                 </div>
             </form>

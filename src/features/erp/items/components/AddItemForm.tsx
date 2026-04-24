@@ -12,7 +12,7 @@ import { sileo } from "sileo";
 
 const itemSchema = z.object({
     nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
-    descripcion: z.string().min(5, "La descripción debe tener al menos 5 caracteres"),
+    descripcion: z.string().optional(),
     cantidad: z.number().min(1, "La cantidad debe ser al menos 1"),
     precio: z.number().min(0.01, "El precio debe ser mayor a 0"),
     unidad: z.string().min(1, "La unidad es requerida"),
@@ -38,7 +38,7 @@ export const AddItemForm = ({ onSuccess, onCancel }: AddItemFormProps) => {
         defaultValues: {
             nombre: "",
             descripcion: "",
-            cantidad: 0,
+            cantidad: 1,
             precio: 0,
             unidad: "unidad",
         }

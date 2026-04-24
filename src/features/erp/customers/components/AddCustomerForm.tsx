@@ -1,138 +1,131 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Mail, Phone, CreditCard, User } from "lucide-react";
-import { useCustomers } from "../hooks/useCustomers";
 import type { CreateCustomerDto } from "../types/customers.type";
+import { api } from "@/api";
 import { sileo } from "sileo";
 
-const customerSchema = z.object({
-    documento: z.number().min(1000000, "Documento debe tener al menos 7 dígitos"),
-    nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
-    apellido: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
-    correo: z.string().email("Correo electrónico inválido"),
-    telefono: z.string().optional(),
+interface TipoDocumento { id: number; nombre: string; abreviatura: string; }
+
+const schema = z.object({
+    tipoDocumentoId: z.number().optional(),
+    documento: z.string().min(7, "Mínimo 7 caracteres"),
+    nombre:    z.string().min(2, "Mínimo 2 caracteres"),
+    apellido:  z.string().min(2, "Mínimo 2 caracteres"),
+    correo:    z.string().email("Correo inválido"),
+    telefono:  z.string().optional(),
 });
 
-type CustomerFormValues = z.infer<typeof customerSchema>;
+type FormValues = z.infer<typeof schema>;
 
 interface AddCustomerFormProps {
-    onSuccess: () => void;
+    onSubmit: (dto: CreateCustomerDto) => Promise<void>;
     onCancel: () => void;
 }
 
-export const AddCustomerForm = ({ onSuccess, onCancel }: AddCustomerFormProps) => {
-    const { addCustomer } = useCustomers();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+export const AddCustomerForm = ({ onSubmit, onCancel }: AddCustomerFormProps) => {
+    const [isSubmitting,    setIsSubmitting]    = useState(false);
+    const [tiposDocumento,  setTiposDocumento]  = useState<TipoDocumento[]>([]);
+    const [loadingTipos,    setLoadingTipos]    = useState(true);
 
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<CustomerFormValues>({
-        resolver: zodResolver(customerSchema),
-        defaultValues: {
-            documento: 0,
-            nombre: "",
-            apellido: "",
-            correo: "",
-            telefono: "",
-        }
+    useEffect(() => {
+        api.get<TipoDocumento[]>("/type-document")
+            .then(r => setTiposDocumento(r.data))
+            .catch(() => {})
+            .finally(() => setLoadingTipos(false));
+    }, []);
+
+    const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
+        resolver: zodResolver(schema),
+        defaultValues: { documento: "", nombre: "", apellido: "", correo: "", telefono: "" },
     });
 
-    const onSubmit = async (data: CustomerFormValues) => {
+    const onFormSubmit = async (data: FormValues) => {
         setIsSubmitting(true);
         try {
-            const result = await addCustomer(data as CreateCustomerDto);
-            if (result) {
-                sileo.success({ title: "Éxito", description: "Cliente creado exitosamente" });
-                onSuccess();
-            } else {
-                sileo.error({ title: "Error", description: "Error al crear el cliente" });
-            }
-        } catch (error) {
-            sileo.error({ title: "Error", description: "Ocurrió un error inesperado" });
+            await onSubmit({
+                tipoDocumentoId: data.tipoDocumentoId,
+                documento: data.documento.trim(),
+                nombre:    data.nombre.trim(),
+                apellido:  data.apellido.trim(),
+                correo:    data.correo.trim(),
+                telefono:  data.telefono?.trim() || undefined,
+            });
+        } catch {
+            sileo.error({ title: "Error", description: "Ocurrió un error inesperado." });
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <form id="add-customer-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
-            <div className="space-y-2">
-                <Label htmlFor="documento">Número de Documento / DNI</Label>
-                <div className="relative">
-                    <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="documento"
-                        type="number"
-                        placeholder="Ingrese el documento"
-                        className="pl-10"
-                        {...register("documento", { valueAsNumber: true })}
-                    />
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 pt-1">
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <Label>Tipo de documento <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Select onValueChange={v => setValue("tipoDocumentoId", Number(v))} disabled={loadingTipos}>
+                        <SelectTrigger>
+                            <SelectValue placeholder={loadingTipos ? "Cargando..." : "DNI, RUC..."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {tiposDocumento.map(t => (
+                                <SelectItem key={t.id} value={String(t.id)}>
+                                    {t.abreviatura} — {t.nombre}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
-                {errors.documento && <p className="text-xs text-red-500 font-medium">{errors.documento.message}</p>}
+                <div className="space-y-1.5">
+                    <Label>Número de documento <span className="text-rose-400">*</span></Label>
+                    <div className="relative">
+                        <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input placeholder="12345678" className="pl-10" {...register("documento")} />
+                    </div>
+                    {errors.documento && <p className="text-xs text-rose-500">{errors.documento.message}</p>}
+                </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label htmlFor="nombre">Nombre</Label>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <Label>Nombre <span className="text-rose-400">*</span></Label>
                     <div className="relative">
                         <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input
-                            id="nombre"
-                            placeholder="Nombre"
-                            className="pl-10"
-                            {...register("nombre")}
-                        />
+                        <Input placeholder="Juan" className="pl-10" {...register("nombre")} />
                     </div>
-                    {errors.nombre && <p className="text-xs text-red-500 font-medium">{errors.nombre.message}</p>}
+                    {errors.nombre && <p className="text-xs text-rose-500">{errors.nombre.message}</p>}
                 </div>
-                <div className="space-y-2">
-                    <Label htmlFor="apellido">Apellido</Label>
-                    <Input
-                        id="apellido"
-                        placeholder="Apellido"
-                        {...register("apellido")}
-                    />
-                    {errors.apellido && <p className="text-xs text-red-500 font-medium">{errors.apellido.message}</p>}
+                <div className="space-y-1.5">
+                    <Label>Apellido <span className="text-rose-400">*</span></Label>
+                    <Input placeholder="Pérez" {...register("apellido")} />
+                    {errors.apellido && <p className="text-xs text-rose-500">{errors.apellido.message}</p>}
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="correo">Correo Electrónico</Label>
+            <div className="space-y-1.5">
+                <Label>Correo electrónico <span className="text-rose-400">*</span></Label>
                 <div className="relative">
                     <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="correo"
-                        type="email"
-                        placeholder="ejemplo@correo.com"
-                        className="pl-10"
-                        {...register("correo")}
-                    />
+                    <Input type="email" placeholder="juan@correo.com" className="pl-10" {...register("correo")} />
                 </div>
-                {errors.correo && <p className="text-xs text-red-500 font-medium">{errors.correo.message}</p>}
+                {errors.correo && <p className="text-xs text-rose-500">{errors.correo.message}</p>}
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono (Opcional)</Label>
+            <div className="space-y-1.5">
+                <Label>Teléfono <span className="text-slate-400 text-xs">(opcional)</span></Label>
                 <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="telefono"
-                        placeholder="999 999 999"
-                        className="pl-10"
-                        {...register("telefono")}
-                    />
+                    <Input placeholder="999 999 999" className="pl-10" {...register("telefono")} />
                 </div>
-                {errors.telefono && <p className="text-xs text-red-500 font-medium">{errors.telefono.message}</p>}
             </div>
 
-            <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+            <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                     Cancelar
                 </Button>

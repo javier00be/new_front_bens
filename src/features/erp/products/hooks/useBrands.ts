@@ -9,53 +9,31 @@ export interface BrandOption {
 export const useBrands = () => {
     const [brands, setBrands] = useState<BrandOption[]>([]);
     const [isLoadingBrands, setIsLoadingBrands] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchBrands = async () => {
+        const load = async () => {
             try {
-                setIsLoadingBrands(true);
-                setError(null);
                 const data = await getBrands();
-
-                const formatted = data.map((item) => ({
-                    value: String(item.id),
-                    label: item.name || item.nombre || item.title || "Sin nombre",
-                }));
-
-                setBrands(formatted);
-            } catch (err: any) {
-                console.error("Error al cargar marcas:", err);
-                setError(err.message || "Error al conectar con la API");
+                setBrands(data.map(item => ({ value: String(item.id), label: item.nombre })));
+            } catch {
+                // silently fail
             } finally {
                 setIsLoadingBrands(false);
             }
         };
-
-        fetchBrands();
+        load();
     }, []);
 
     const addBrandToAPI = async (name: string): Promise<BrandOption | null> => {
         try {
-            const newBrandData = await createBrand(name);
-            const newOption = {
-                value: String(newBrandData.id),
-                label: newBrandData.name || newBrandData.nombre || newBrandData.title || name,
-            };
-
-            // Actualizamos el estado local para que aparezca en el Select
-            setBrands((prev) => [...prev, newOption]);
-            return newOption;
-        } catch (err) {
-            console.error("Error al crear marca:", err);
-            return null; // El componente puede decidir cómo manejar el error
+            const created = await createBrand(name);
+            const option = { value: String(created.id), label: created.nombre };
+            setBrands(prev => [...prev, option]);
+            return option;
+        } catch {
+            return null;
         }
     };
 
-    return {
-        brands,
-        isLoadingBrands,
-        error,
-        addBrandToAPI,
-    };
+    return { brands, isLoadingBrands, addBrandToAPI };
 };

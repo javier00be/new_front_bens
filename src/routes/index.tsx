@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { StoreLayout } from "../layouts/StoreLayout";
 import { ERPLayout } from "../layouts/ERPLayout";
+import { ProtectedRoute } from "@/components/shared/ProtectedRoute";
 import { InventoryDashboard } from "@/features/erp/inventory/components/InventoryDashboard";
 import { SalesDashboard } from "@/features/erp/sales/components/SalesDashboard";
 import { UsersDashboard } from "@/features/erp/users/components/UsersDashboard";
@@ -9,90 +10,71 @@ import { OrdersDashboard } from "@/features/erp/orders/components/OrdersDashboar
 import { CustomersDashboard } from "@/features/erp/customers/components/CustomersDashboard";
 import { SuppliersDashboard } from "@/features/erp/suppliers/components/SuppliersDashboard";
 import { ItemsDashboard } from "@/features/erp/items/components/ItemsDashboard";
+import { PurchasesDashboard } from "@/features/erp/purchases/components/PurchasesDashboard";
+import { ProductionDashboard } from "@/features/erp/production/components/ProductionDashboard";
+import { RecipesDashboard } from "@/features/erp/recipes/components/RecipesDashboard";
+import { LogisticsDashboard } from "@/features/erp/logistics/components/LogisticsDashboard";
+import { ERPDashboard } from "@/features/erp/dashboard/components/ERPDashboard";
+import { SettingsDashboard } from "@/features/erp/settings/components/SettingsDashboard";
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { RegisterForm } from "@/features/auth/components/RegisterForm";
 import { HomePage } from "@/pages/ecommerce/HomePage";
 
-// Tipos básicos para los modulos
-
-const ERPDashboard = () => <div className="p-4 bg-white rounded-lg shadow"><h2 className="text-2xl font-bold mb-4">Dashboard General</h2><p>Resumen de métricas clave del sistema.</p></div>;
-
 const router = createBrowserRouter([
-    // Rutas Públicas - Ecommerce
+    // ─── Rutas Públicas — Ecommerce ───────────────────────────────────────────
     {
         path: "/",
         element: <StoreLayout />,
         children: [
-            {
-                index: true,
-                element: <HomePage />,
-            },
-            // Aquí irían las rutas de carrito, checkout, producto individual, etc.
+            { index: true, element: <HomePage /> },
         ],
     },
 
-    // Rutas Privadas - ERP (Sistema Interno)
+    // ─── Rutas Privadas — ERP ─────────────────────────────────────────────────
     {
         path: "/admin",
-        element: <ERPLayout />,
+        element: <ProtectedRoute />,
         children: [
             {
-                index: true,
-                element: <ERPDashboard />,
+                element: <ERPLayout />,
+                children: [
+                    { index: true, element: <ERPDashboard /> },
+
+                    // Usuarios
+                    { path: "users", element: <UsersDashboard /> },
+
+                    // Catálogo
+                    { path: "products",  element: <ProductsDashboard /> },
+                    { path: "inventory", element: <InventoryDashboard /> },
+
+                    // Clientes y Proveedores
+                    { path: "customers", element: <CustomersDashboard /> },
+                    { path: "suppliers", element: <SuppliersDashboard /> },
+
+                    // Ventas
+                    { path: "orders",  element: <OrdersDashboard /> },
+                    { path: "sales",   element: <SalesDashboard /> },
+                    { path: "logistics", element: <LogisticsDashboard /> },
+
+                    // Compras y Materias Primas
+                    { path: "purchases", element: <PurchasesDashboard /> },
+                    { path: "items",     element: <ItemsDashboard /> },
+
+                    // Fabricación
+                    { path: "production", element: <ProductionDashboard /> },
+                    { path: "recipes",    element: <RecipesDashboard /> },
+
+                    // Config
+                    { path: "settings", element: <SettingsDashboard /> },
+                ],
             },
-            {
-                path: "users",
-                element: <UsersDashboard />,
-            },
-            {
-                path: "products",
-                element: <ProductsDashboard />,
-            },
-            {
-                path: "inventory",
-                element: <InventoryDashboard />,
-            },
-            {
-                path: "orders",
-                element: <OrdersDashboard />,
-            },
-            {
-                path: "sales",
-                element: <SalesDashboard />,
-            },
-            {
-                path: "purchases",
-                element: <div className="p-4 bg-white rounded-lg shadow"><h2 className="text-2xl font-bold mb-4">Módulo de Compras</h2><p>Aquí se gestionarán las compras a proveedores.</p></div>,
-            },
-            {
-                path: "items",
-                element: <ItemsDashboard />,
-            },
-            {
-                path: "customers",
-                element: <CustomersDashboard />,
-            },
-            {
-                path: "suppliers",
-                element: <SuppliersDashboard />,
-            },
-            {
-                path: "settings",
-                element: <div className="p-4 bg-white rounded-lg shadow"><h2 className="text-2xl font-bold mb-4">Configuración del Sistema</h2></div>,
-            }
         ],
     },
 
-    // Rutas Auth y 404
-    {
-        path: "/login",
-        element: <LoginForm />,
-    },
-    {
-        path: "*",
-        element: <Navigate to="/" replace />,
-    },
+    // ─── Auth ─────────────────────────────────────────────────────────────────
+    { path: "/login",    element: <LoginForm /> },
+    { path: "/register", element: <RegisterForm /> },
+    { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
-export const AppRouter = () => {
-    return <RouterProvider router={router} />;
-};
+export const AppRouter = () => <RouterProvider router={router} />;

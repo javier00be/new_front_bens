@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { createProduct, getProducts } from "../services/products.service";
+import { useState, useEffect } from "react";
+import { getAllProducts, createProduct, updateProduct, deleteProduct } from "../services/products.service";
 import type { Product, CreateProductDto } from "../types/Products.type";
 
 export const useProducts = () => {
@@ -10,28 +10,60 @@ export const useProducts = () => {
     const fetchProducts = async () => {
         setIsLoadingProducts(true);
         try {
-            const data = await getProducts();
+            const data = await getAllProducts();
             setProducts(data);
-        } catch (error) {
-            console.error("Error al obtener productos:", error);
+        } catch {
+            // caller handles error display
         } finally {
             setIsLoadingProducts(false);
         }
     };
 
+    useEffect(() => { fetchProducts(); }, []);
+
     const addProductToAPI = async (dto: CreateProductDto): Promise<Product | null> => {
         setIsSavingProduct(true);
         try {
-            const newProduct = await createProduct(dto);
-            setProducts((prev) => [...prev, newProduct]);
-            return newProduct;
-        } catch (error) {
-            console.error("Error al crear producto:", error);
+            const created = await createProduct(dto);
+            setProducts(prev => [created, ...prev]);
+            return created;
+        } catch {
             return null;
         } finally {
             setIsSavingProduct(false);
         }
     };
 
-    return { products, isLoadingProducts, isSavingProduct, fetchProducts, addProductToAPI };
+    const editProductInAPI = async (id: number, dto: Partial<CreateProductDto>): Promise<Product | null> => {
+        setIsSavingProduct(true);
+        try {
+            const updated = await updateProduct(id, dto);
+            setProducts(prev => prev.map(p => p.id === id ? updated : p));
+            return updated;
+        } catch {
+            return null;
+        } finally {
+            setIsSavingProduct(false);
+        }
+    };
+
+    const removeProductFromAPI = async (id: number): Promise<boolean> => {
+        try {
+            await deleteProduct(id);
+            setProducts(prev => prev.filter(p => p.id !== id));
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    return {
+        products,
+        isLoadingProducts,
+        isSavingProduct,
+        fetchProducts,
+        addProductToAPI,
+        editProductInAPI,
+        removeProductFromAPI,
+    };
 };

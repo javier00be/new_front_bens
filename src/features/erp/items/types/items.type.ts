@@ -1,7 +1,7 @@
 export interface Item {
     id: number;
     nombre: string;
-    descripcion: string;
+    descripcion?: string;
     cantidad: number;
     precio: number;
     unidad: string;
@@ -11,7 +11,7 @@ export interface Item {
 
 export interface CreateItemDto {
     nombre: string;
-    descripcion: string;
+    descripcion?: string;
     cantidad: number;
     precio: number;
     unidad: string;

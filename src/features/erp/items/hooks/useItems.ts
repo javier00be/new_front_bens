@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { getItems, createItem } from "../services/items.service";
+import { useState, useEffect } from "react";
+import { getItems, createItem, updateItem, deleteItem } from "../services/items.service";
 import type { Item, CreateItemDto } from "../types/items.type";
 
 export const useItems = () => {
@@ -11,23 +11,44 @@ export const useItems = () => {
         try {
             const data = await getItems();
             setItems(data);
-        } catch (error) {
-            console.error("Error fetching items:", error);
+        } catch {
+            // caller handles error display
         } finally {
             setIsLoading(false);
         }
     };
 
-    const addItem = async (dto: CreateItemDto) => {
+    useEffect(() => { fetchItems(); }, []);
+
+    const addItem = async (dto: CreateItemDto): Promise<Item | null> => {
         try {
-            const newItem = await createItem(dto);
-            setItems((prev) => [...prev, newItem]);
-            return newItem;
-        } catch (error) {
-            console.error("Error creating item:", error);
+            const created = await createItem(dto);
+            setItems(prev => [created, ...prev]);
+            return created;
+        } catch {
             return null;
         }
     };
 
-    return { items, isLoading, fetchItems, addItem };
+    const editItem = async (id: number, dto: Partial<CreateItemDto>): Promise<Item | null> => {
+        try {
+            const updated = await updateItem(id, dto);
+            setItems(prev => prev.map(i => i.id === id ? updated : i));
+            return updated;
+        } catch {
+            return null;
+        }
+    };
+
+    const removeItem = async (id: number): Promise<boolean> => {
+        try {
+            await deleteItem(id);
+            setItems(prev => prev.filter(i => i.id !== id));
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    return { items, isLoading, fetchItems, addItem, editItem, removeItem };
 };

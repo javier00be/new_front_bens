@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Supplier, CreateSupplierDto } from "../types/suppliers.type";
-import { getSuppliers, createSupplier } from "../services/suppliers.service";
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from "../services/suppliers.service";
 
 export const useSuppliers = () => {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -11,29 +11,44 @@ export const useSuppliers = () => {
         try {
             const data = await getSuppliers();
             setSuppliers(data);
-        } catch (error) {
-            console.error("Error fetching suppliers:", error);
+        } catch {
+            // caller handles error display
         } finally {
             setIsLoading(false);
         }
     };
 
-    const addSupplier = async (dto: CreateSupplierDto) => {
-        setIsLoading(true);
+    useEffect(() => { fetchSuppliers(); }, []);
+
+    const addSupplier = async (dto: CreateSupplierDto): Promise<Supplier | null> => {
         try {
-            const newSupplier = await createSupplier(dto);
-            setSuppliers((prev) => [...prev, newSupplier]);
-            return newSupplier;
-        } catch (error) {
-            console.error("Error creating supplier:", error);
+            const created = await createSupplier(dto);
+            setSuppliers(prev => [created, ...prev]);
+            return created;
+        } catch {
             return null;
-        } finally {
-            setIsLoading(false);
         }
     };
 
-    return { suppliers, isLoading, fetchSuppliers, addSupplier };
+    const editSupplier = async (id: number, dto: Partial<CreateSupplierDto>): Promise<Supplier | null> => {
+        try {
+            const updated = await updateSupplier(id, dto);
+            setSuppliers(prev => prev.map(s => s.id === id ? updated : s));
+            return updated;
+        } catch {
+            return null;
+        }
+    };
+
+    const removeSupplier = async (id: number): Promise<boolean> => {
+        try {
+            await deleteSupplier(id);
+            setSuppliers(prev => prev.filter(s => s.id !== id));
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    return { suppliers, isLoading, fetchSuppliers, addSupplier, editSupplier, removeSupplier };
 };
-
-
-

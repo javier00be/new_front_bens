@@ -20,12 +20,16 @@ interface GenericTableProps<T> {
     columns: Column<T>[];
     data: T[];
     onRowClick?: (item: T) => void;
+    isLoading?: boolean;
+    emptyMessage?: string;
 }
 
-export const GenericTable = <T extends Record<string, any>>({
+export const GenericTable = <T extends Record<string, unknown>>({
     columns,
     data,
     onRowClick,
+    isLoading = false,
+    emptyMessage = "No hay datos para mostrar.",
 }: GenericTableProps<T>) => {
     return (
         <div className="rounded-md border bg-white overflow-hidden">
@@ -33,9 +37,9 @@ export const GenericTable = <T extends Record<string, any>>({
                 <TableHeader>
                     <TableRow>
                         {columns.map((column, index) => (
-                            <TableHead 
-                                key={index} 
-                                className={`bg-slate-50 font-semibold text-slate-700 ${column.headerClassName || ""}`}
+                            <TableHead
+                                key={index}
+                                className={`bg-slate-50 font-semibold text-slate-700 ${column.headerClassName ?? ""}`}
                             >
                                 {column.header}
                             </TableHead>
@@ -43,18 +47,27 @@ export const GenericTable = <T extends Record<string, any>>({
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {!Array.isArray(data) || data.length === 0 ? (
+                    {isLoading ? (
                         <TableRow>
-                            <TableCell colSpan={columns.length} className="h-24 text-center text-slate-500">
-                                {!Array.isArray(data) ? "Error: Los datos no son válidos." : "No hay datos para mostrar."}
+                            <TableCell colSpan={columns.length} className="h-24 text-center text-slate-400">
+                                <div className="flex items-center justify-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                                    Cargando...
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ) : !Array.isArray(data) || data.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={columns.length} className="h-24 text-center text-slate-400">
+                                {emptyMessage}
                             </TableCell>
                         </TableRow>
                     ) : (
                         data.map((row, rowIndex) => (
                             <TableRow
                                 key={rowIndex}
-                                className={onRowClick ? "cursor-pointer hover:bg-slate-50 transition-colors" : ""}
-                                onClick={() => onRowClick && onRowClick(row)}
+                                className={onRowClick ? "cursor-pointer hover:bg-slate-50 transition-colors" : "hover:bg-slate-50/50"}
+                                onClick={() => onRowClick?.(row)}
                             >
                                 {columns.map((column, colIndex) => (
                                     <TableCell key={colIndex} className={column.className}>
@@ -67,7 +80,6 @@ export const GenericTable = <T extends Record<string, any>>({
                         ))
                     )}
                 </TableBody>
-
             </Table>
         </div>
     );

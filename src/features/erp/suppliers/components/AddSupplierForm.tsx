@@ -5,27 +5,26 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Phone, CreditCard, Building2 } from "lucide-react";
-import { useSuppliers } from "../hooks/useSuppliers";
+import { Mail, Phone, CreditCard, Building2, AlignLeft } from "lucide-react";
 import type { CreateSupplierDto } from "../types/suppliers.type";
 import { sileo } from "sileo";
 
 const supplierSchema = z.object({
-    documento: z.string().min(8, "El número de documento debe tener al menos 8 caracteres"),
-    descripcion: z.string().min(2, "La descripción debe tener al menos 2 caracteres"),
-    correo: z.string().email("Correo electrónico inválido"),
-    telefono: z.string().optional(),
+    documento:   z.string().min(8, "Mínimo 8 caracteres"),
+    nombre:      z.string().min(2, "Mínimo 2 caracteres"),
+    descripcion: z.string().optional(),
+    correo:      z.string().email("Correo inválido"),
+    telefono:    z.string().optional(),
 });
 
 type SupplierFormValues = z.infer<typeof supplierSchema>;
 
 interface AddSupplierFormProps {
-    onSuccess: () => void;
+    onSubmit: (dto: CreateSupplierDto) => Promise<void>;
     onCancel: () => void;
 }
 
-export const AddSupplierForm = ({ onSuccess, onCancel }: AddSupplierFormProps) => {
-    const { addSupplier } = useSuppliers();
+export const AddSupplierForm = ({ onSubmit, onCancel }: AddSupplierFormProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const {
@@ -34,93 +33,72 @@ export const AddSupplierForm = ({ onSuccess, onCancel }: AddSupplierFormProps) =
         formState: { errors },
     } = useForm<SupplierFormValues>({
         resolver: zodResolver(supplierSchema),
-        defaultValues: {
-            documento: "",
-            descripcion: "",
-            correo: "",
-            telefono: "",
-        }
+        defaultValues: { documento: "", nombre: "", descripcion: "", correo: "", telefono: "" },
     });
 
-    const onSubmit = async (data: SupplierFormValues) => {
+    const onFormSubmit = async (data: SupplierFormValues) => {
         setIsSubmitting(true);
         try {
-            const result = await addSupplier(data as CreateSupplierDto);
-            if (result) {
-                sileo.success({ title: "Éxito", description: "Proveedor creado exitosamente" });
-                onSuccess();
-            } else {
-                sileo.error({ title: "Error", description: "Error al crear el proveedor" });
-            }
-        } catch (error) {
-            sileo.error({ title: "Error", description: "Ocurrió un error inesperado" });
+            await onSubmit({
+                documento:   data.documento.trim(),
+                nombre:      data.nombre.trim(),
+                descripcion: data.descripcion?.trim() || undefined,
+                correo:      data.correo.trim(),
+                telefono:    data.telefono?.trim() || undefined,
+            });
+        } catch {
+            sileo.error({ title: "Error", description: "Ocurrió un error inesperado." });
         } finally {
             setIsSubmitting(false);
         }
     };
 
     return (
-        <form id="add-supplier-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
-            <div className="space-y-2">
-                <Label htmlFor="documento">Número de RUC / Documento</Label>
+        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+                <Label htmlFor="documento">RUC / Documento <span className="text-rose-400">*</span></Label>
                 <div className="relative">
                     <CreditCard className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="documento"
-                        type="text"
-                        placeholder="Ingrese el RUC o documento"
-                        className="pl-10"
-                        {...register("documento")}
-                    />
+                    <Input id="documento" placeholder="20123456789" className="pl-10" {...register("documento")} />
                 </div>
-                {errors.documento && <p className="text-xs text-red-500 font-medium">{errors.documento.message}</p>}
+                {errors.documento && <p className="text-xs text-rose-500">{errors.documento.message}</p>}
             </div>
 
-
-            <div className="space-y-2">
-                <Label htmlFor="descripcion">Descripción / Razón Social</Label>
+            <div className="space-y-1.5">
+                <Label htmlFor="nombre">Razón Social / Nombre <span className="text-rose-400">*</span></Label>
                 <div className="relative">
                     <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="descripcion"
-                        placeholder="Nombre de la empresa"
-                        className="pl-10"
-                        {...register("descripcion")}
-                    />
+                    <Input id="nombre" placeholder="Empresa S.A.C." className="pl-10" {...register("nombre")} />
                 </div>
-                {errors.descripcion && <p className="text-xs text-red-500 font-medium">{errors.descripcion.message}</p>}
+                {errors.nombre && <p className="text-xs text-rose-500">{errors.nombre.message}</p>}
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="correo">Correo Electrónico</Label>
+            <div className="space-y-1.5">
+                <Label htmlFor="descripcion">Descripción <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                <div className="relative">
+                    <AlignLeft className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input id="descripcion" placeholder="Notas o rubro del proveedor" className="pl-10" {...register("descripcion")} />
+                </div>
+            </div>
+
+            <div className="space-y-1.5">
+                <Label htmlFor="correo">Correo electrónico <span className="text-rose-400">*</span></Label>
                 <div className="relative">
                     <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="correo"
-                        type="email"
-                        placeholder="ejemplo@correo.com"
-                        className="pl-10"
-                        {...register("correo")}
-                    />
+                    <Input id="correo" type="email" placeholder="contacto@empresa.com" className="pl-10" {...register("correo")} />
                 </div>
-                {errors.correo && <p className="text-xs text-red-500 font-medium">{errors.correo.message}</p>}
+                {errors.correo && <p className="text-xs text-rose-500">{errors.correo.message}</p>}
             </div>
 
-            <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono (Opcional)</Label>
+            <div className="space-y-1.5">
+                <Label htmlFor="telefono">Teléfono <span className="text-slate-400 text-xs">(opcional)</span></Label>
                 <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                        id="telefono"
-                        placeholder="999 999 999"
-                        className="pl-10"
-                        {...register("telefono")}
-                    />
+                    <Input id="telefono" placeholder="999 999 999" className="pl-10" {...register("telefono")} />
                 </div>
-                {errors.telefono && <p className="text-xs text-red-500 font-medium">{errors.telefono.message}</p>}
             </div>
 
-            <div className="flex justify-end gap-3 pt-6 border-t mt-6">
+            <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                     Cancelar
                 </Button>

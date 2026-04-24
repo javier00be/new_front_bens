@@ -4,26 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Trash2, ShoppingCart, User, FileText, CreditCard, Package } from "lucide-react";
-import { EstadoPedido, type CreateOrderDto, type OrderDetail, type MedioPago, type TipoDocumento } from "../types/orders.type";
+import { type CreateOrderDto, type MedioPago, type TipoDocumento } from "../types/orders.type";
 import type { Customer } from "@/features/erp/customers/types/customers.type";
-import type { Item } from "@/features/erp/items/types/items.type";
+import type { Product } from "@/features/erp/products/types/Products.type";
+import type { SizeResponse } from "@/features/erp/products/types/size.type";
 import { getCustomers } from "@/features/erp/customers/services/customers.service";
-import { getItems } from "@/features/erp/items/services/items.service";
+import { getAllProducts } from "@/features/erp/products/services/products.service";
+import { getSizes } from "@/features/erp/products/services/size.service";
 import { getMediosPago, getTiposDocumento } from "../services/orders.service";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OrderDetailForm {
     productoId: number;
     productoNombre: string;
+    tallaId: number | null;
+    colorId: number | null;
     cantidad: number;
     precioUnitario: number;
     descuentoLinea: number;
@@ -44,10 +40,8 @@ interface OrderFormProps {
 }
 
 const IGV_RATE = 0.18;
-
 const fmt = (n: number) => `S/ ${n.toFixed(2)}`;
 
-// ─── Section Title ────────────────────────────────────────────────────────────
 const SectionTitle = ({ icon: Icon, label }: { icon: React.ElementType; label: string }) => (
     <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 rounded-md bg-indigo-50 flex items-center justify-center shrink-0">
@@ -58,43 +52,37 @@ const SectionTitle = ({ icon: Icon, label }: { icon: React.ElementType; label: s
     </div>
 );
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
-    const [items, setItems] = useState<Item[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [tallas, setTallas] = useState<SizeResponse[]>([]);
     const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
     const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
-    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loadingData, setLoadingData] = useState(true);
     const [detalles, setDetalles] = useState<OrderDetailForm[]>([]);
 
     const { register, handleSubmit, setValue, formState: { errors } } = useForm<OrderFormValues>({
-        defaultValues: {
-            direccionEnvio: "",
-            fechaEntrega: "",
-            observaciones: "",
-        },
+        defaultValues: { direccionEnvio: "", fechaEntrega: "", observaciones: "" },
     });
 
     useEffect(() => {
         const load = async () => {
             try {
-                const [c, i, m, t] = await Promise.all([
-                    getCustomers(), 
-                    getItems(),
+                const [c, p, t, m, td] = await Promise.all([
+                    getCustomers(),
+                    getAllProducts(),
+                    getSizes(),
                     getMediosPago(),
-                    getTiposDocumento()
+                    getTiposDocumento(),
                 ]);
                 setCustomers(c);
-                setItems(i);
+                setProducts(p);
+                setTallas(t);
                 setMediosPago(m);
-                setTiposDocumento(t);
-                
-                // Set initial values for dynamic selects if data exists
+                setTiposDocumento(td);
                 if (m.length > 0) setValue("medioPagoId", m[0].id);
-                if (t.length > 0) setValue("tipoDocumentoId", t[0].id);
-                
+                if (td.length > 0) setValue("tipoDocumentoId", td[0].id);
             } catch (e) {
                 console.error("Error loading data:", e);
             } finally {
@@ -104,39 +92,33 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
         load();
     }, [setValue]);
 
-    // ── Line management ──────────────────────────────────────────────────────
     const addLine = () => {
-        if (items.length === 0) return;
-        const first = items[0];
+        if (products.length === 0) return;
+        const first = products[0];
         setDetalles(prev => [...prev, {
             productoId: first.id,
             productoNombre: first.nombre,
+            tallaId: null,
+            colorId: null,
             cantidad: 1,
             precioUnitario: first.precio,
             descuentoLinea: 0,
         }]);
     };
 
-    const removeLine = (idx: number) =>
-        setDetalles(prev => prev.filter((_, i) => i !== idx));
+    const removeLine = (idx: number) => setDetalles(prev => prev.filter((_, i) => i !== idx));
 
-    const updateLine = (idx: number, field: keyof OrderDetailForm, value: string | number) => {
+    const updateLine = (idx: number, field: keyof OrderDetailForm, value: string | number | null) => {
         setDetalles(prev => prev.map((d, i) => {
             if (i !== idx) return d;
             if (field === "productoId") {
-                const item = items.find(it => it.id === Number(value));
-                return {
-                    ...d,
-                    productoId: Number(value),
-                    productoNombre: item?.nombre ?? "",
-                    precioUnitario: item?.precio ?? 0,
-                };
+                const product = products.find(p => p.id === Number(value));
+                return { ...d, productoId: Number(value), productoNombre: product?.nombre ?? "", precioUnitario: product?.precio ?? 0, colorId: null, tallaId: null };
             }
-            return { ...d, [field]: Number(value) };
+            return { ...d, [field]: value };
         }));
     };
 
-    // ── Calculations ─────────────────────────────────────────────────────────
     const calcLine = useCallback((d: OrderDetailForm) => {
         const base = d.cantidad * d.precioUnitario;
         const desc = base * (d.descuentoLinea / 100);
@@ -148,44 +130,29 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
     const totals = detalles.reduce(
         (acc, d) => {
             const c = calcLine(d);
-            return {
-                subtotal: acc.subtotal + c.neto,
-                impuesto: acc.impuesto + c.igv,
-                descuento: acc.descuento + c.desc,
-                total: acc.total + c.total,
-            };
+            return { subtotal: acc.subtotal + c.neto, impuesto: acc.impuesto + c.igv, descuento: acc.descuento + c.desc, total: acc.total + c.total };
         },
         { subtotal: 0, impuesto: 0, descuento: 0, total: 0 }
     );
 
-    // ── Submit ────────────────────────────────────────────────────────────────
     const onSubmit = async (values: OrderFormValues) => {
         if (detalles.length === 0) return;
+
         setIsSubmitting(true);
         try {
             const dto: CreateOrderDto = {
-                clienteId: Number(values.clienteId),
-                medioPagoId: Number(values.medioPagoId),
-                tipoDocumentoId: Number(values.tipoDocumentoId),
-                direccionEnvio: values.direccionEnvio || undefined,
-                fechaEntrega: values.fechaEntrega || undefined,
-                observaciones: values.observaciones || undefined,
-                subtotal: totals.subtotal,
-                impuesto: totals.impuesto,
-                descuento: totals.descuento,
-                descuentoCupon: 0,
-                total: totals.total,
-                estado: EstadoPedido.PENDIENTE,
-                detalles: detalles.map((d): Omit<OrderDetail, 'id' | 'pedidoId' | 'productoNombre'> => {
-                    const c = calcLine(d);
-                    return {
-                        productoId: d.productoId,
-                        cantidad: d.cantidad,
-                        precioUnitario: d.precioUnitario,
-                        descuento: c.desc,
-                        subtotal: c.neto,
-                    };
-                }),
+                clienteId:       Number(values.clienteId),
+                medioPagoId:     values.medioPagoId     ? Number(values.medioPagoId)     : undefined,
+                tipoDocumentoId: values.tipoDocumentoId ? Number(values.tipoDocumentoId) : undefined,
+                direccionEnvio:  values.direccionEnvio  || undefined,
+                fechaEntrega:    values.fechaEntrega    || undefined,
+                observaciones:   values.observaciones   || undefined,
+                detalles: detalles.map(d => ({
+                    productoId: d.productoId,
+                    ...(d.tallaId  && { tallaId:  d.tallaId  }),
+                    ...(d.colorId  && { colorId:  d.colorId  }),
+                    cantidad:   d.cantidad,
+                })),
             };
             await onSuccess(dto);
         } finally {
@@ -193,7 +160,6 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
         }
     };
 
-    // ── Loading state ─────────────────────────────────────────────────────────
     if (loadingData) {
         return (
             <div className="py-16 flex flex-col items-center gap-3 text-slate-400">
@@ -206,109 +172,69 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
-            {/* ── CLIENTE ─────────────────────────────────────────────────── */}
+            {/* CLIENTE */}
             <div>
                 <SectionTitle icon={User} label="Datos del Cliente" />
-                <Label htmlFor="clienteId" className="text-xs text-slate-600 mb-1.5 block">
-                    Cliente <span className="text-rose-500">*</span>
-                </Label>
+                <Label className="text-xs text-slate-600 mb-1.5 block">Cliente <span className="text-rose-500">*</span></Label>
                 <select
-                    id="clienteId"
-                    className="w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     {...register("clienteId", { required: true, valueAsNumber: true })}
                 >
                     <option value="">— Seleccionar cliente —</option>
                     {customers.map(c => (
-                        <option key={c.id} value={c.id}>
-                            {c.nombre} {c.apellido} — Doc: {c.documento}
-                        </option>
+                        <option key={c.id} value={c.id}>{c.nombre} {c.apellido} — {c.documento}</option>
                     ))}
                 </select>
-                {errors.clienteId && (
-                    <p className="text-xs text-rose-500 mt-1">Selecciona un cliente</p>
-                )}
+                {errors.clienteId && <p className="text-xs text-rose-500 mt-1">Selecciona un cliente</p>}
             </div>
 
-            {/* ── PAGO Y COMPROBANTE ───────────────────────────────────────── */}
+            {/* PAGO Y COMPROBANTE */}
             <div>
                 <SectionTitle icon={CreditCard} label="Pago y Comprobante" />
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <Label htmlFor="medioPagoId" className="text-xs text-slate-600 mb-1.5 block">
-                            Método de Pago
-                        </Label>
-                        <Select
-                            onValueChange={v => setValue("medioPagoId", Number(v))}
-                            defaultValue={mediosPago[0]?.id.toString()}
-                        >
-                            <SelectTrigger id="medioPagoId" className="h-9 text-sm">
-                                <SelectValue placeholder="Seleccionar pago" />
-                            </SelectTrigger>
+                        <Label className="text-xs text-slate-600 mb-1.5 block">Método de Pago</Label>
+                        <Select onValueChange={v => setValue("medioPagoId", Number(v))} defaultValue={mediosPago[0]?.id.toString()}>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Seleccionar pago" /></SelectTrigger>
                             <SelectContent>
-                                {mediosPago.map(m => (
-                                    <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
-                                ))}
+                                {mediosPago.map(m => <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
                     <div>
-                        <Label htmlFor="tipoDocumentoId" className="text-xs text-slate-600 mb-1.5 block">
-                            Tipo de Comprobante
-                        </Label>
-                        <Select
-                            onValueChange={v => setValue("tipoDocumentoId", Number(v))}
-                            defaultValue={tiposDocumento[0]?.id.toString()}
-                        >
-                            <SelectTrigger id="tipoDocumentoId" className="h-9 text-sm">
-                                <SelectValue placeholder="Seleccionar documento" />
-                            </SelectTrigger>
+                        <Label className="text-xs text-slate-600 mb-1.5 block">Tipo de Comprobante</Label>
+                        <Select onValueChange={v => setValue("tipoDocumentoId", Number(v))} defaultValue={tiposDocumento[0]?.id.toString()}>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Seleccionar documento" /></SelectTrigger>
                             <SelectContent>
-                                {tiposDocumento.map(t => (
-                                    <SelectItem key={t.id} value={t.id.toString()}>{t.nombre} ({t.abreviatura})</SelectItem>
-                                ))}
+                                {tiposDocumento.map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.nombre} ({t.abreviatura})</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
             </div>
 
-            {/* ── ENTREGA ──────────────────────────────────────────────────── */}
+            {/* ENTREGA */}
             <div>
                 <SectionTitle icon={Package} label="Entrega" />
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <Label htmlFor="fechaEntrega" className="text-xs text-slate-600 mb-1.5 block">
-                            Fecha de Entrega
-                        </Label>
-                        <Input
-                            id="fechaEntrega"
-                            type="date"
-                            className="h-9 text-sm"
-                            min={new Date().toISOString().split("T")[0]}
-                            {...register("fechaEntrega")}
-                        />
+                        <Label className="text-xs text-slate-600 mb-1.5 block">Fecha de Entrega</Label>
+                        <Input type="date" className="h-9 text-sm" min={new Date().toISOString().split("T")[0]} {...register("fechaEntrega")} />
                     </div>
                     <div>
-                        <Label htmlFor="direccionEnvio" className="text-xs text-slate-600 mb-1.5 block">
-                            Dirección de Envío
-                        </Label>
-                        <Input
-                            id="direccionEnvio"
-                            placeholder="Av. Principal 123..."
-                            className="h-9 text-sm"
-                            {...register("direccionEnvio")}
-                        />
+                        <Label className="text-xs text-slate-600 mb-1.5 block">Dirección de Envío</Label>
+                        <Input placeholder="Av. Principal 123..." className="h-9 text-sm" {...register("direccionEnvio")} />
                     </div>
                 </div>
             </div>
 
-            {/* ── PRODUCTOS ────────────────────────────────────────────────── */}
+            {/* PRODUCTOS */}
             <div>
                 <SectionTitle icon={ShoppingCart} label="Productos del Pedido" />
 
                 {detalles.length > 0 && (
-                    <div className="grid grid-cols-[2fr_68px_96px_74px_76px_32px] gap-2 mb-2 px-1">
-                        {["Producto", "Cant.", "P. Unit.", "Desc%", "Subtotal", ""].map((h, i) => (
+                    <div className="grid grid-cols-[2fr_1fr_1fr_60px_80px_60px_32px] gap-2 mb-2 px-1">
+                        {["Producto", "Talla", "Color", "Cant.", "P.Unit.", "Desc%", ""].map((h, i) => (
                             <span key={i} className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{h}</span>
                         ))}
                     </div>
@@ -316,66 +242,56 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
 
                 <div className="space-y-2">
                     {detalles.map((d, idx) => {
-                        const c = calcLine(d);
+                        const productColors = products.find(p => p.id === d.productoId)?.colores ?? [];
                         return (
-                            <div
-                                key={idx}
-                                className="grid grid-cols-[2fr_68px_96px_74px_76px_32px] gap-2 items-center bg-slate-50 rounded-lg px-2 py-2 border border-slate-100 hover:border-indigo-100 transition-colors"
-                            >
+                            <div key={idx} className="grid grid-cols-[2fr_1fr_1fr_60px_80px_60px_32px] gap-2 items-center bg-slate-50 rounded-lg px-2 py-2 border border-slate-100">
                                 {/* Producto */}
                                 <select
-                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate"
+                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     value={d.productoId}
                                     onChange={e => updateLine(idx, "productoId", e.target.value)}
                                 >
-                                    {items.map(it => (
-                                        <option key={it.id} value={it.id}>{it.nombre}</option>
-                                    ))}
+                                    {products.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                </select>
+
+                                {/* Talla */}
+                                <select
+                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    value={d.tallaId ?? ""}
+                                    onChange={e => updateLine(idx, "tallaId", e.target.value ? Number(e.target.value) : null)}
+                                >
+                                    <option value="">—</option>
+                                    {tallas.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                                </select>
+
+                                {/* Color */}
+                                <select
+                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    value={d.colorId ?? ""}
+                                    onChange={e => updateLine(idx, "colorId", e.target.value ? Number(e.target.value) : null)}
+                                >
+                                    <option value="">—</option>
+                                    {productColors.map(col => <option key={col.id} value={col.id}>{col.nombre}</option>)}
                                 </select>
 
                                 {/* Cantidad */}
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={d.cantidad}
-                                    onChange={e => updateLine(idx, "cantidad", e.target.value)}
-                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
+                                <input type="number" min={1} value={d.cantidad} onChange={e => updateLine(idx, "cantidad", e.target.value)}
+                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-500" />
 
-                                {/* Precio unitario */}
-                                <input
-                                    type="number"
-                                    min={0}
-                                    step={0.01}
-                                    value={d.precioUnitario}
-                                    onChange={e => updateLine(idx, "precioUnitario", e.target.value)}
-                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
+                                {/* Precio */}
+                                <input type="number" min={0} step={0.01} value={d.precioUnitario} onChange={e => updateLine(idx, "precioUnitario", e.target.value)}
+                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
 
-                                {/* Descuento % */}
+                                {/* Descuento */}
                                 <div className="relative">
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={100}
-                                        value={d.descuentoLinea}
-                                        onChange={e => updateLine(idx, "descuentoLinea", e.target.value)}
-                                        className="h-8 w-full rounded-md border border-slate-200 bg-white pl-2 pr-5 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                                    <input type="number" min={0} max={100} value={d.descuentoLinea} onChange={e => updateLine(idx, "descuentoLinea", e.target.value)}
+                                        className="h-8 w-full rounded-md border border-slate-200 bg-white pl-2 pr-4 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
                                 </div>
 
-                                {/* Subtotal línea */}
-                                <span className="text-xs font-semibold text-indigo-700 text-right tabular-nums pr-1">
-                                    {fmt(c.neto)}
-                                </span>
-
                                 {/* Eliminar */}
-                                <button
-                                    type="button"
-                                    onClick={() => removeLine(idx)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors"
-                                >
+                                <button type="button" onClick={() => removeLine(idx)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                             </div>
@@ -383,26 +299,29 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
                     })}
                 </div>
 
-                <button
-                    type="button"
-                    onClick={addLine}
-                    disabled={items.length === 0}
-                    className="mt-3 flex items-center gap-2 text-sm text-indigo-600 font-medium hover:text-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                    <PlusCircle className="w-4 h-4" />
-                    Agregar producto
+                {/* Subtotal por línea */}
+                {detalles.map((d, idx) => {
+                    const c = calcLine(d);
+                    return (
+                        <div key={`sub-${idx}`} className="flex justify-end text-xs text-slate-500 pr-10 -mt-1">
+                            <span>Línea {idx + 1}: <span className="font-semibold text-indigo-600">{fmt(c.neto)}</span></span>
+                        </div>
+                    );
+                })}
+
+                <button type="button" onClick={addLine} disabled={products.length === 0}
+                    className="mt-3 flex items-center gap-2 text-sm text-indigo-600 font-medium hover:text-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    <PlusCircle className="w-4 h-4" /> Agregar producto
                 </button>
 
                 {detalles.length === 0 && (
                     <div className="mt-2 p-4 border-2 border-dashed border-slate-200 rounded-lg text-center">
-                        <p className="text-xs text-slate-400">
-                            No hay productos en el pedido. Usa el botón de arriba para agregar.
-                        </p>
+                        <p className="text-xs text-slate-400">No hay productos. Usa el botón de arriba para agregar.</p>
                     </div>
                 )}
             </div>
 
-            {/* ── TOTALES ──────────────────────────────────────────────────── */}
+            {/* TOTALES */}
             {detalles.length > 0 && (
                 <div className="bg-linear-to-br from-indigo-50 to-slate-50 rounded-xl p-4 border border-indigo-100">
                     <div className="space-y-1.5 text-sm">
@@ -420,7 +339,7 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
                             <span>IGV (18%)</span>
                             <span className="tabular-nums">{fmt(totals.impuesto)}</span>
                         </div>
-                        <div className="flex justify-between font-bold text-base text-slate-900 pt-2 border-t border-indigo-100 mt-1">
+                        <div className="flex justify-between font-bold text-base text-slate-900 pt-2 border-t border-indigo-100">
                             <span>Total</span>
                             <span className="text-indigo-700 tabular-nums">{fmt(totals.total)}</span>
                         </div>
@@ -428,44 +347,25 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
                 </div>
             )}
 
-            {/* ── OBSERVACIONES ────────────────────────────────────────────── */}
+            {/* OBSERVACIONES */}
             <div>
                 <SectionTitle icon={FileText} label="Observaciones" />
-                <Textarea
-                    id="observaciones"
-                    placeholder="Notas adicionales sobre el pedido..."
-                    className="text-sm resize-none"
-                    rows={2}
-                    {...register("observaciones")}
-                />
+                <Textarea placeholder="Notas adicionales sobre el pedido..." className="text-sm resize-none" rows={2} {...register("observaciones")} />
             </div>
 
-            {/* ── ACCIONES ─────────────────────────────────────────────────── */}
+            {/* ACCIONES */}
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onCancel}
-                    disabled={isSubmitting}
-                    className="h-9 px-5 text-sm"
-                >
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="h-9 px-5 text-sm">
                     Cancelar
                 </Button>
-                <Button
-                    type="submit"
-                    disabled={isSubmitting || detalles.length === 0}
-                    className="h-9 px-6 text-sm bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-200"
-                >
+                <Button type="submit" disabled={isSubmitting || detalles.length === 0} className="h-9 px-6 text-sm bg-indigo-600 hover:bg-indigo-700">
                     {isSubmitting ? (
                         <span className="flex items-center gap-2">
                             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             Guardando…
                         </span>
                     ) : (
-                        <span className="flex items-center gap-2">
-                            <ShoppingCart className="w-4 h-4" />
-                            Crear Pedido
-                        </span>
+                        <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Crear Pedido</span>
                     )}
                 </Button>
             </div>

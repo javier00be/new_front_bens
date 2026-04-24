@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { getCustomers, createCustomer } from "../services/customers.service";
+import { useState, useEffect } from "react";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "../services/customers.service";
 import type { Customer, CreateCustomerDto } from "../types/customers.type";
 
 export const useCustomers = () => {
@@ -11,23 +11,44 @@ export const useCustomers = () => {
         try {
             const data = await getCustomers();
             setCustomers(data);
-        } catch (error) {
-            console.error("Error fetching customers:", error);
+        } catch {
+            // caller handles error display
         } finally {
             setIsLoading(false);
         }
     };
 
-    const addCustomer = async (dto: CreateCustomerDto) => {
+    useEffect(() => { fetchCustomers(); }, []);
+
+    const addCustomer = async (dto: CreateCustomerDto): Promise<Customer | null> => {
         try {
-            const newCustomer = await createCustomer(dto);
-            setCustomers((prev) => [...prev, newCustomer]);
-            return newCustomer;
-        } catch (error) {
-            console.error("Error creating customer:", error);
+            const created = await createCustomer(dto);
+            setCustomers(prev => [created, ...prev]);
+            return created;
+        } catch {
             return null;
         }
     };
 
-    return { customers, isLoading, fetchCustomers, addCustomer };
+    const editCustomer = async (id: number, dto: Partial<CreateCustomerDto>): Promise<Customer | null> => {
+        try {
+            const updated = await updateCustomer(id, dto);
+            setCustomers(prev => prev.map(c => c.id === id ? updated : c));
+            return updated;
+        } catch {
+            return null;
+        }
+    };
+
+    const removeCustomer = async (id: number): Promise<boolean> => {
+        try {
+            await deleteCustomer(id);
+            setCustomers(prev => prev.filter(c => c.id !== id));
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    return { customers, isLoading, fetchCustomers, addCustomer, editCustomer, removeCustomer };
 };

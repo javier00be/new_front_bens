@@ -9,53 +9,31 @@ export interface CategoryOption {
 export const useCategories = () => {
     const [categories, setCategories] = useState<CategoryOption[]>([]);
     const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchCategories = async () => {
+        const load = async () => {
             try {
-                setIsLoadingCategories(true);
-                setError(null);
                 const data = await getCategories();
-
-                const formatted = data.map((item) => ({
-                    value: String(item.id),
-                    label: item.name || item.nombre || item.title || "Sin nombre",
-                }));
-
-                setCategories(formatted);
-            } catch (err: any) {
-                console.error("Error al cargar categorías:", err);
-                setError(err.message || "Error al conectar con la API");
+                setCategories(data.map(item => ({ value: String(item.id), label: item.nombre })));
+            } catch {
+                // silently fail — categories will be empty
             } finally {
                 setIsLoadingCategories(false);
             }
         };
-
-        fetchCategories();
+        load();
     }, []);
 
     const addCategoryToAPI = async (name: string): Promise<CategoryOption | null> => {
         try {
-            const newCategoryData = await createCategory(name);
-            const newOption = {
-                value: String(newCategoryData.id),
-                label: newCategoryData.name || newCategoryData.nombre || newCategoryData.title || name,
-            };
-
-            // Actualizamos el estado local para que aparezca en el Select
-            setCategories((prev) => [...prev, newOption]);
-            return newOption;
-        } catch (err) {
-            console.error("Error al crear categoría:", err);
+            const created = await createCategory(name);
+            const option = { value: String(created.id), label: created.nombre };
+            setCategories(prev => [...prev, option]);
+            return option;
+        } catch {
             return null;
         }
     };
 
-    return {
-        categories,
-        isLoadingCategories,
-        error,
-        addCategoryToAPI,
-    };
+    return { categories, isLoadingCategories, addCategoryToAPI };
 };

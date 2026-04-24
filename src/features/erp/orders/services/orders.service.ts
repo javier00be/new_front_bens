@@ -1,41 +1,41 @@
-import axios from "axios";
+import { api } from "@/api";
 import type { Order, CreateOrderDto, MedioPago, TipoDocumento } from "../types/orders.type";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 export const getOrders = async (): Promise<Order[]> => {
-    // Para desarrollo usaremos los mocks por ahora si el backend no está listo
-    try {
-        const response = await axios.get(`${API_URL}/pedidos`);
-        return response.data;
-    } catch (error) {
-        console.warn("Backend not ready, using mocks", error);
-        const { MOCK_ORDERS } = await import("../data/mock-orders");
-        return MOCK_ORDERS;
-    }
+    const response = await api.get("/orders");
+    return response.data;
+};
+
+export const getOrderById = async (id: number): Promise<Order> => {
+    const response = await api.get(`/orders/${id}`);
+    return response.data;
 };
 
 export const createOrder = async (dto: CreateOrderDto): Promise<Order> => {
-    const response = await axios.post(`${API_URL}/pedidos`, dto);
+    const response = await api.post("/orders", dto);
+    return response.data;
+};
+
+export const confirmPayment = async (
+    id: number,
+    medioPagoId: number,
+    tipoDocumentoId?: number
+): Promise<Order> => {
+    const response = await api.patch(`/orders/${id}/pay`, { medioPagoId, tipoDocumentoId });
+    return response.data;
+};
+
+export const cancelOrder = async (id: number): Promise<Order> => {
+    const response = await api.patch(`/orders/${id}/cancel`);
     return response.data;
 };
 
 export const getMediosPago = async (): Promise<MedioPago[]> => {
-    try {
-        const response = await axios.get(`${API_URL}/medio-pago`);
-        return response.data;
-    } catch (error) {
-        console.warn("MedioPago endpoint not ready, using empty list", error);
-        return [];
-    }
+    const response = await api.get("/payment-method");
+    return response.data;
 };
 
 export const getTiposDocumento = async (): Promise<TipoDocumento[]> => {
-    try {
-        const response = await axios.get(`${API_URL}/tipo-documento`);
-        return response.data;
-    } catch (error) {
-        console.warn("TipoDocumento endpoint not ready, using empty list", error);
-        return [];
-    }
+    const response = await api.get("/type-document");
+    return response.data;
 };
