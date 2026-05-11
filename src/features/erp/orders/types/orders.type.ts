@@ -23,6 +23,14 @@ export interface TipoDocumento {
     updatedAt:   string;
 }
 
+export interface TipoComprobante {
+    id:          number;
+    nombre:      string;
+    abreviatura: string;
+    createdAt:   string;
+    updatedAt:   string;
+}
+
 export interface OrderDetail {
     id?:             number;
     pedidoId?:       number;
@@ -61,8 +69,8 @@ export interface Order {
     estadoPago:       string;
     medioPagoId?:     number | null;
     medioPago?:       MedioPago;
-    tipoDocumentoId?: number | null;
-    tipoDocumento?:   TipoDocumento;
+    tipoComprobanteId?: number | null;
+    tipoComprobante?:   TipoComprobante;
     direccionEnvio?:  string | null;
     fechaEntrega?:    string | null;
     observaciones?:   string | null;
@@ -73,10 +81,12 @@ export interface Order {
 }
 
 export interface CreateOrderDetailDto {
-    productoId: number;
-    tallaId:    number;
-    colorId:    number;
-    cantidad:   number;
+    productoId:      number;
+    tallaId?:        number;
+    colorId?:        number;
+    cantidad:        number;
+    precioUnitario?: number;
+    omitirDescuento?: boolean;
 }
 
 export interface CreateOrderDto {
@@ -84,7 +94,7 @@ export interface CreateOrderDto {
     usuarioId?:       number;
     cuponCodigo?:     string;
     medioPagoId?:     number;
-    tipoDocumentoId?: number;
+    tipoComprobanteId?: number;
     direccionEnvio?:  string;
     fechaEntrega?:    string;
     observaciones?:   string;

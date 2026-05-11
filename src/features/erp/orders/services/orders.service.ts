@@ -1,5 +1,5 @@
 import { api } from "@/api";
-import type { Order, CreateOrderDto, MedioPago, TipoDocumento } from "../types/orders.type";
+import type { Order, CreateOrderDto, MedioPago, TipoDocumento, TipoComprobante } from "../types/orders.type";
 
 export const getOrders = async (): Promise<Order[]> => {
     const response = await api.get("/orders");
@@ -19,9 +19,9 @@ export const createOrder = async (dto: CreateOrderDto): Promise<Order> => {
 export const confirmPayment = async (
     id: number,
     medioPagoId: number,
-    tipoDocumentoId?: number
+    tipoComprobanteId?: number
 ): Promise<Order> => {
-    const response = await api.patch(`/orders/${id}/pay`, { medioPagoId, tipoDocumentoId });
+    const response = await api.patch(`/orders/${id}/pay`, { medioPagoId, tipoComprobanteId });
     return response.data;
 };
 
@@ -37,5 +37,10 @@ export const getMediosPago = async (): Promise<MedioPago[]> => {
 
 export const getTiposDocumento = async (): Promise<TipoDocumento[]> => {
     const response = await api.get("/type-document");
+    return response.data;
+};
+
+export const getTiposComprobante = async (): Promise<TipoComprobante[]> => {
+    const response = await api.get("/tipo-comprobante");
     return response.data;
 };

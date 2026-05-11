@@ -6,14 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Trash2, ShoppingCart, User, FileText, CreditCard, Package } from "lucide-react";
-import { type CreateOrderDto, type MedioPago, type TipoDocumento } from "../types/orders.type";
+import { type CreateOrderDto, type MedioPago, type TipoComprobante } from "../types/orders.type";
 import type { Customer } from "@/features/erp/customers/types/customers.type";
 import type { Product } from "@/features/erp/products/types/Products.type";
-import type { SizeResponse } from "@/features/erp/products/types/size.type";
 import { getCustomers } from "@/features/erp/customers/services/customers.service";
 import { getAllProducts } from "@/features/erp/products/services/products.service";
-import { getSizes } from "@/features/erp/products/services/size.service";
-import { getMediosPago, getTiposDocumento } from "../services/orders.service";
+import { getMediosPago, getTiposComprobante } from "../services/orders.service";
 
 interface OrderDetailForm {
     productoId: number;
@@ -23,12 +21,13 @@ interface OrderDetailForm {
     cantidad: number;
     precioUnitario: number;
     descuentoLinea: number;
+    omitirDescuento: boolean;
 }
 
 interface OrderFormValues {
     clienteId: number;
     medioPagoId: number;
-    tipoDocumentoId: number;
+    tipoComprobanteId: number;
     direccionEnvio: string;
     fechaEntrega: string;
     observaciones: string;
@@ -55,9 +54,8 @@ const SectionTitle = ({ icon: Icon, label }: { icon: React.ElementType; label: s
 export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
-    const [tallas, setTallas] = useState<SizeResponse[]>([]);
     const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
-    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
+    const [tiposComprobante, setTiposComprobante] = useState<TipoComprobante[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loadingData, setLoadingData] = useState(true);
     const [detalles, setDetalles] = useState<OrderDetailForm[]>([]);
@@ -69,20 +67,18 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
     useEffect(() => {
         const load = async () => {
             try {
-                const [c, p, t, m, td] = await Promise.all([
+                const [c, p, m, tc] = await Promise.all([
                     getCustomers(),
                     getAllProducts(),
-                    getSizes(),
                     getMediosPago(),
-                    getTiposDocumento(),
+                    getTiposComprobante(),
                 ]);
                 setCustomers(c);
                 setProducts(p);
-                setTallas(t);
                 setMediosPago(m);
-                setTiposDocumento(td);
+                setTiposComprobante(tc);
                 if (m.length > 0) setValue("medioPagoId", m[0].id);
-                if (td.length > 0) setValue("tipoDocumentoId", td[0].id);
+                if (tc.length > 0) setValue("tipoComprobanteId", tc[0].id);
             } catch (e) {
                 console.error("Error loading data:", e);
             } finally {
@@ -92,28 +88,78 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
         load();
     }, [setValue]);
 
+    // Tallas disponibles para un producto: derivadas de sus inventarios
+    const getTallasForProduct = (productoId: number) => {
+        const product = products.find(p => p.id === productoId);
+        if (!product?.inventarios) return [];
+        const seen = new Set<number>();
+        return product.inventarios
+            .filter(inv => { if (seen.has(inv.tallaId)) return false; seen.add(inv.tallaId); return true; })
+            .map(inv => inv.talla);
+    };
+
+    // Colores disponibles para un producto + talla específica
+    const getColoresForProductAndTalla = (productoId: number, tallaId: number | null) => {
+        const product = products.find(p => p.id === productoId);
+        if (!product?.inventarios) return [];
+        const inventariosFiltrados = tallaId
+            ? product.inventarios.filter(inv => inv.tallaId === tallaId)
+            : product.inventarios;
+        const seen = new Set<number>();
+        return inventariosFiltrados
+            .filter(inv => { if (seen.has(inv.colorId)) return false; seen.add(inv.colorId); return true; })
+            .map(inv => inv.color);
+    };
+
+    // Precio del inventario para una combinación producto+talla+color
+    const getPrecioInventario = (productoId: number, tallaId: number | null, colorId: number | null): number => {
+        const product = products.find(p => p.id === productoId);
+        if (!product?.inventarios?.length) return Number(product?.precio ?? 0);
+        // Busca coincidencia exacta talla+color
+        const exact = product.inventarios.find(i => i.tallaId === tallaId && i.colorId === colorId);
+        if (exact && Number(exact.precio) > 0) return Number(exact.precio);
+        // Si solo hay talla seleccionada, usa el primer inventario de esa talla
+        const byTalla = tallaId ? product.inventarios.find(i => i.tallaId === tallaId) : null;
+        if (byTalla && Number(byTalla.precio) > 0) return Number(byTalla.precio);
+        // Fallback al precio base del producto
+        return Number(product.precio);
+    };
+
     const addLine = () => {
         if (products.length === 0) return;
         const first = products[0];
+        const precio = getPrecioInventario(first.id, null, null);
         setDetalles(prev => [...prev, {
             productoId: first.id,
             productoNombre: first.nombre,
             tallaId: null,
             colorId: null,
             cantidad: 1,
-            precioUnitario: first.precio,
+            precioUnitario: precio,
             descuentoLinea: 0,
+            omitirDescuento: false,
         }]);
     };
 
     const removeLine = (idx: number) => setDetalles(prev => prev.filter((_, i) => i !== idx));
 
-    const updateLine = (idx: number, field: keyof OrderDetailForm, value: string | number | null) => {
+    const updateLine = (idx: number, field: keyof OrderDetailForm, value: string | number | boolean | null) => {
         setDetalles(prev => prev.map((d, i) => {
             if (i !== idx) return d;
             if (field === "productoId") {
                 const product = products.find(p => p.id === Number(value));
-                return { ...d, productoId: Number(value), productoNombre: product?.nombre ?? "", precioUnitario: product?.precio ?? 0, colorId: null, tallaId: null };
+                const precio = getPrecioInventario(Number(value), null, null);
+                return { ...d, productoId: Number(value), productoNombre: product?.nombre ?? "", precioUnitario: precio, colorId: null, tallaId: null, omitirDescuento: false };
+            }
+            if (field === "tallaId") {
+                const newTallaId = value as number | null;
+                const precio = getPrecioInventario(d.productoId, newTallaId, null);
+                return { ...d, tallaId: newTallaId, colorId: null, precioUnitario: precio };
+            }
+            if (field === "colorId") {
+                const newColorId = value as number | null;
+                const precio = getPrecioInventario(d.productoId, d.tallaId, newColorId);
+                return { ...d, colorId: newColorId, precioUnitario: precio };
             }
             return { ...d, [field]: value };
         }));
@@ -143,15 +189,17 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
             const dto: CreateOrderDto = {
                 clienteId:       Number(values.clienteId),
                 medioPagoId:     values.medioPagoId     ? Number(values.medioPagoId)     : undefined,
-                tipoDocumentoId: values.tipoDocumentoId ? Number(values.tipoDocumentoId) : undefined,
+                tipoComprobanteId: values.tipoComprobanteId ? Number(values.tipoComprobanteId) : undefined,
                 direccionEnvio:  values.direccionEnvio  || undefined,
                 fechaEntrega:    values.fechaEntrega    || undefined,
                 observaciones:   values.observaciones   || undefined,
                 detalles: detalles.map(d => ({
-                    productoId: d.productoId,
-                    ...(d.tallaId  && { tallaId:  d.tallaId  }),
-                    ...(d.colorId  && { colorId:  d.colorId  }),
-                    cantidad:   d.cantidad,
+                    productoId:      d.productoId,
+                    ...(d.tallaId   != null && { tallaId: d.tallaId }),
+                    ...(d.colorId   != null && { colorId: d.colorId }),
+                    cantidad:        Number(d.cantidad),
+                    precioUnitario:  Number(d.precioUnitario),
+                    omitirDescuento: d.omitirDescuento,
                 })),
             };
             await onSuccess(dto);
@@ -203,10 +251,10 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
                     </div>
                     <div>
                         <Label className="text-xs text-slate-600 mb-1.5 block">Tipo de Comprobante</Label>
-                        <Select onValueChange={v => setValue("tipoDocumentoId", Number(v))} defaultValue={tiposDocumento[0]?.id.toString()}>
-                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Seleccionar documento" /></SelectTrigger>
+                        <Select onValueChange={v => setValue("tipoComprobanteId", Number(v))} defaultValue={tiposComprobante[0]?.id.toString()}>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Seleccionar comprobante" /></SelectTrigger>
                             <SelectContent>
-                                {tiposDocumento.map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.nombre} ({t.abreviatura})</SelectItem>)}
+                                {tiposComprobante.map(t => <SelectItem key={t.id} value={t.id.toString()}>{t.nombre} ({t.abreviatura})</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -242,58 +290,87 @@ export const OrderForm = ({ onSuccess, onCancel }: OrderFormProps) => {
 
                 <div className="space-y-2">
                     {detalles.map((d, idx) => {
-                        const productColors = products.find(p => p.id === d.productoId)?.colores ?? [];
+                        const tallasDisponibles = getTallasForProduct(d.productoId);
+                        const coloresDisponibles = getColoresForProductAndTalla(d.productoId, d.tallaId);
+                        const product = products.find(p => p.id === d.productoId);
+                        const tieneDescuento = product && product.tipoDescuento !== 'SIN_DESCUENTO' && Number(product.valorDescuento) > 0;
+                        const labelDescuento = tieneDescuento
+                            ? product!.tipoDescuento === 'PORCENTAJE'
+                                ? `${Number(product!.valorDescuento)}% dto.`
+                                : `S/ ${Number(product!.valorDescuento)} dto.`
+                            : null;
+
                         return (
-                            <div key={idx} className="grid grid-cols-[2fr_1fr_1fr_60px_80px_60px_32px] gap-2 items-center bg-slate-50 rounded-lg px-2 py-2 border border-slate-100">
-                                {/* Producto */}
-                                <select
-                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={d.productoId}
-                                    onChange={e => updateLine(idx, "productoId", e.target.value)}
-                                >
-                                    {products.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                                </select>
+                            <div key={idx} className="rounded-lg border border-slate-100 bg-slate-50 overflow-hidden">
+                                <div className="grid grid-cols-[2fr_1fr_1fr_60px_80px_60px_32px] gap-2 items-center px-2 py-2">
+                                    {/* Producto */}
+                                    <select
+                                        className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        value={d.productoId}
+                                        onChange={e => updateLine(idx, "productoId", e.target.value)}
+                                    >
+                                        {products.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                    </select>
 
-                                {/* Talla */}
-                                <select
-                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={d.tallaId ?? ""}
-                                    onChange={e => updateLine(idx, "tallaId", e.target.value ? Number(e.target.value) : null)}
-                                >
-                                    <option value="">—</option>
-                                    {tallas.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                                </select>
+                                    {/* Talla */}
+                                    <select
+                                        className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        value={d.tallaId ?? ""}
+                                        onChange={e => updateLine(idx, "tallaId", e.target.value ? Number(e.target.value) : null)}
+                                    >
+                                        <option value="">—</option>
+                                        {tallasDisponibles.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                                    </select>
 
-                                {/* Color */}
-                                <select
-                                    className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={d.colorId ?? ""}
-                                    onChange={e => updateLine(idx, "colorId", e.target.value ? Number(e.target.value) : null)}
-                                >
-                                    <option value="">—</option>
-                                    {productColors.map(col => <option key={col.id} value={col.id}>{col.nombre}</option>)}
-                                </select>
+                                    {/* Color */}
+                                    <select
+                                        className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        value={d.colorId ?? ""}
+                                        onChange={e => updateLine(idx, "colorId", e.target.value ? Number(e.target.value) : null)}
+                                    >
+                                        <option value="">—</option>
+                                        {coloresDisponibles.map(col => <option key={col.id} value={col.id}>{col.nombre}</option>)}
+                                    </select>
 
-                                {/* Cantidad */}
-                                <input type="number" min={1} value={d.cantidad} onChange={e => updateLine(idx, "cantidad", e.target.value)}
-                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    {/* Cantidad */}
+                                    <input type="number" min={1} value={d.cantidad} onChange={e => updateLine(idx, "cantidad", e.target.value)}
+                                        className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-indigo-500" />
 
-                                {/* Precio */}
-                                <input type="number" min={0} step={0.01} value={d.precioUnitario} onChange={e => updateLine(idx, "precioUnitario", e.target.value)}
-                                    className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    {/* Precio */}
+                                    <input type="number" min={0} step={0.01} value={d.precioUnitario} onChange={e => updateLine(idx, "precioUnitario", e.target.value)}
+                                        className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
 
-                                {/* Descuento */}
-                                <div className="relative">
-                                    <input type="number" min={0} max={100} value={d.descuentoLinea} onChange={e => updateLine(idx, "descuentoLinea", e.target.value)}
-                                        className="h-8 w-full rounded-md border border-slate-200 bg-white pl-2 pr-4 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                                    {/* Desc% manual */}
+                                    <div className="relative">
+                                        <input type="number" min={0} max={100} value={d.descuentoLinea} onChange={e => updateLine(idx, "descuentoLinea", e.target.value)}
+                                            className="h-8 w-full rounded-md border border-slate-200 bg-white pl-2 pr-4 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                                    </div>
+
+                                    {/* Eliminar */}
+                                    <button type="button" onClick={() => removeLine(idx)}
+                                        className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
 
-                                {/* Eliminar */}
-                                <button type="button" onClick={() => removeLine(idx)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {/* Indicador de descuento del producto */}
+                                {tieneDescuento && (
+                                    <div className="flex items-center gap-2 px-2 pb-1.5">
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                            Descuento producto: {labelDescuento}
+                                        </span>
+                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={d.omitirDescuento}
+                                                onChange={e => updateLine(idx, "omitirDescuento", e.target.checked)}
+                                                className="w-3 h-3 accent-rose-500"
+                                            />
+                                            <span className="text-[10px] text-slate-500">Quitar descuento para esta línea</span>
+                                        </label>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

@@ -17,12 +17,23 @@ export interface ProductColor {
     nombre: string;
 }
 
+export interface ProductInventario {
+    id: number;
+    tallaId: number;
+    colorId: number;
+    stock: number;
+    precio: number;
+    talla: { id: number; nombre: string };
+    color: { id: number; nombre: string };
+}
+
 export interface Product {
     id: number;
     nombre: string;
     precio: number;
     colores: ProductColor[];
     tallas?: { id: number; nombre: string }[];
+    inventarios?: ProductInventario[];
     imagenes?: string[];
     sku?: string;
     descripcion?: string;

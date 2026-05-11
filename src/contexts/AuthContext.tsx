@@ -5,6 +5,7 @@ interface AuthUser {
     id: number;
     correo: string;
     rol: "ADMINISTRADOR" | "VENDEDOR" | "CLIENTE";
+    clienteId?: number | null;
 }
 
 interface RegisterDto {
@@ -29,7 +30,7 @@ function decodeToken(token: string): AuthUser | null {
     try {
         const payload = token.split(".")[1];
         const decoded = JSON.parse(atob(payload));
-        return { id: decoded.sub, correo: decoded.correo, rol: decoded.rol };
+        return { id: decoded.sub, correo: decoded.correo, rol: decoded.rol, clienteId: decoded.clienteId ?? null };
     } catch {
         return null;
     }
@@ -52,14 +53,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const response = await api.post("/auth/login", { correo, password });
         const { access_token, user: userData } = response.data;
         localStorage.setItem("erp_token", access_token);
-        setUser({ id: userData.id, correo: userData.correo, rol: userData.rol });
+        setUser({ id: userData.id, correo: userData.correo, rol: userData.rol, clienteId: userData.cliente?.id ?? null });
     };
 
     const register = async (dto: RegisterDto) => {
         const response = await api.post("/auth/register", dto);
         const { access_token, user: userData } = response.data;
         localStorage.setItem("erp_token", access_token);
-        setUser({ id: userData.id, correo: userData.correo, rol: userData.rol });
+        setUser({ id: userData.id, correo: userData.correo, rol: userData.rol, clienteId: userData.cliente?.id ?? null });
     };
 
     const logout = () => {

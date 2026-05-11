@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Fragment } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,22 +67,44 @@ interface VariantsModalProps {
     variants: InventoryItem[];
     isLoading: boolean;
     onClose: () => void;
+    // Stock por color/variante
     editingId: number | null;
     editingStock: string;
-    onStartEdit: (id: number, stock: number) => void;
-    onCancelEdit: () => void;
+    onStartEditStock: (id: number, stock: number) => void;
+    onCancelEditStock: () => void;
     onStockChange: (v: string) => void;
     onSaveStock: (id: number) => void;
+    // Precio por talla (aplica a todos los colores de esa talla)
+    editingTallaId: number | null;
+    editingTallaPrecio: string;
+    onStartEditPrecio: (tallaId: number, precio: number) => void;
+    onCancelEditPrecio: () => void;
+    onTallaPrecioChange: (v: string) => void;
+    onSavePrecio: (tallaId: number) => void;
 }
 
 const VariantsModal = ({
     product, variants, isLoading, onClose,
-    editingId, editingStock,
-    onStartEdit, onCancelEdit, onStockChange, onSaveStock,
+    editingId, editingStock, onStartEditStock, onCancelEditStock, onStockChange, onSaveStock,
+    editingTallaId, editingTallaPrecio, onStartEditPrecio, onCancelEditPrecio, onTallaPrecioChange, onSavePrecio,
 }: VariantsModalProps) => {
-    if (!product) return null;
-
     const totalStock = variants.reduce((acc, v) => acc + v.stock, 0);
+
+    const grouped = useMemo(() => {
+        const map = new Map<number, InventoryItem[]>();
+        for (const item of variants) {
+            if (!map.has(item.tallaId)) map.set(item.tallaId, []);
+            map.get(item.tallaId)!.push(item);
+        }
+        return Array.from(map.values()).map(items => ({
+            tallaId: items[0].tallaId,
+            tallaNombre: items[0].talla?.nombre ?? "—",
+            precio: Number(items[0].precio),
+            items,
+        }));
+    }, [variants]);
+
+    if (!product) return null;
 
     return (
         <GenericModal
@@ -105,13 +127,9 @@ const VariantsModal = ({
                         {product.categoria && (
                             <span className="text-xs text-slate-400">{product.categoria.nombre}</span>
                         )}
-                        <span className="font-mono font-bold text-slate-700 text-sm">
-                            S/ {Number(product.precio).toFixed(2)}
-                        </span>
                         {variants.length > 0 && (
                             <span className="text-xs text-slate-500">
-                                Stock total:{" "}
-                                <span className="font-bold text-slate-700">{totalStock} und.</span>
+                                Stock total: <span className="font-bold text-slate-700">{totalStock} und.</span>
                             </span>
                         )}
                     </div>
@@ -134,88 +152,135 @@ const VariantsModal = ({
                 <table className="w-full">
                     <thead>
                         <tr className="border-b border-slate-100">
-                            <th className="pb-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Talla</th>
                             <th className="pb-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Color</th>
                             <th className="pb-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Stock</th>
                             <th className="pb-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">Estado</th>
                             <th className="pb-3" />
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {variants.map(item => (
-                            <tr
-                                key={item.id}
-                                className={`transition-colors ${editingId === item.id ? "bg-indigo-50/60" : "hover:bg-slate-50/50"}`}
-                            >
-                                <td className="py-3 pr-4">
-                                    {item.talla?.nombre
-                                        ? <span className="text-xs font-bold bg-slate-900 text-white px-2.5 py-1 rounded-lg">{item.talla.nombre}</span>
-                                        : <span className="text-slate-300 text-xs">—</span>
-                                    }
-                                </td>
-                                <td className="py-3 pr-4">
-                                    <ColorDot nombre={item.color?.nombre} />
-                                </td>
-                                <td className="py-3 pr-4">
-                                    {editingId === item.id ? (
-                                        <div className="flex items-center gap-1.5">
-                                            <button
-                                                className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"
-                                                onClick={() => onStockChange(String(Math.max(0, parseInt(editingStock || "0") - 1)))}
-                                            >
-                                                <Minus className="w-3 h-3" />
-                                            </button>
-                                            <Input
-                                                type="number" min={0}
-                                                className="h-7 w-16 text-xs text-center rounded-lg border-indigo-300"
-                                                value={editingStock}
-                                                onChange={e => onStockChange(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === "Enter") onSaveStock(item.id);
-                                                    if (e.key === "Escape") onCancelEdit();
-                                                }}
-                                                autoFocus
-                                            />
-                                            <button
-                                                className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"
-                                                onClick={() => onStockChange(String(parseInt(editingStock || "0") + 1))}
-                                            >
-                                                <Plus className="w-3 h-3" />
-                                            </button>
+                    <tbody>
+                        {grouped.map(group => (
+                            <Fragment key={group.tallaId}>
+                                {/* Fila de cabecera de talla con precio editable */}
+                                <tr className="border-t border-slate-200 bg-slate-50/80">
+                                    <td colSpan={4} className="px-2 py-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold bg-slate-900 text-white px-2.5 py-1 rounded-lg">
+                                                {group.tallaNombre}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                {editingTallaId === group.tallaId ? (
+                                                    <>
+                                                        <span className="text-xs text-slate-400">S/</span>
+                                                        <Input
+                                                            type="number" min={0} step={0.01}
+                                                            className="h-6 w-20 text-xs text-right rounded-lg border-indigo-300"
+                                                            value={editingTallaPrecio}
+                                                            onChange={e => onTallaPrecioChange(e.target.value)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === "Enter") onSavePrecio(group.tallaId);
+                                                                if (e.key === "Escape") onCancelEditPrecio();
+                                                            }}
+                                                            autoFocus
+                                                        />
+                                                        <button onClick={() => onSavePrecio(group.tallaId)} title="Guardar precio"
+                                                            className="w-6 h-6 rounded-md bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white transition-colors">
+                                                            <Check className="w-3 h-3" />
+                                                        </button>
+                                                        <button onClick={onCancelEditPrecio} title="Cancelar"
+                                                            className="w-6 h-6 rounded-md bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-xs font-bold tabular-nums text-slate-700">
+                                                            S/ {group.precio.toFixed(2)}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => onStartEditPrecio(group.tallaId, group.precio)}
+                                                            title="Editar precio de talla"
+                                                            className="w-6 h-6 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors"
+                                                        >
+                                                            <Edit2 className="w-3 h-3" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <span className={`text-sm font-bold tabular-nums ${
-                                            item.stock === 0 ? "text-rose-600" :
-                                            item.stock < 10  ? "text-amber-600" : "text-slate-800"
-                                        }`}>
-                                            {item.stock}
-                                            <span className="text-xs font-normal text-slate-400 ml-1">und.</span>
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="py-3 pr-4">
-                                    <StockBadge stock={item.stock} />
-                                </td>
-                                <td className="py-3">
-                                    {editingId === item.id ? (
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => onSaveStock(item.id)} title="Guardar"
-                                                className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white transition-colors">
-                                                <Check className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={onCancelEdit} title="Cancelar"
-                                                className="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors">
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => onStartEdit(item.id, item.stock)} title="Ajustar stock"
-                                            className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors">
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                                {/* Filas de color con stock editable */}
+                                {group.items.map(item => (
+                                    <tr
+                                        key={item.id}
+                                        className={`transition-colors ${editingId === item.id ? "bg-indigo-50/60" : "hover:bg-slate-50/50"}`}
+                                    >
+                                        <td className="py-3 pl-4 pr-4">
+                                            <ColorDot nombre={item.color?.nombre} />
+                                        </td>
+                                        <td className="py-3 pr-4">
+                                            {editingId === item.id ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"
+                                                        onClick={() => onStockChange(String(Math.max(0, parseInt(editingStock || "0") - 1)))}
+                                                    >
+                                                        <Minus className="w-3 h-3" />
+                                                    </button>
+                                                    <Input
+                                                        type="number" min={0}
+                                                        className="h-7 w-16 text-xs text-center rounded-lg border-indigo-300"
+                                                        value={editingStock}
+                                                        onChange={e => onStockChange(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === "Enter") onSaveStock(item.id);
+                                                            if (e.key === "Escape") onCancelEditStock();
+                                                        }}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors"
+                                                        onClick={() => onStockChange(String(parseInt(editingStock || "0") + 1))}
+                                                    >
+                                                        <Plus className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className={`text-sm font-bold tabular-nums ${
+                                                    item.stock === 0 ? "text-rose-600" :
+                                                    item.stock < 10  ? "text-amber-600" : "text-slate-800"
+                                                }`}>
+                                                    {item.stock}
+                                                    <span className="text-xs font-normal text-slate-400 ml-1">und.</span>
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="py-3 pr-4">
+                                            <StockBadge stock={item.stock} />
+                                        </td>
+                                        <td className="py-3">
+                                            {editingId === item.id ? (
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => onSaveStock(item.id)} title="Guardar"
+                                                        className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white transition-colors">
+                                                        <Check className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={onCancelEditStock} title="Cancelar"
+                                                        className="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition-colors">
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => onStartEditStock(item.id, item.stock)} title="Editar stock"
+                                                    className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors">
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </Fragment>
                         ))}
                     </tbody>
                 </table>
@@ -239,9 +304,11 @@ export const InventoryDashboard = () => {
     const [search, setSearch]           = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Edición inline de stock (dentro del modal)
-    const [editingId, setEditingId]       = useState<number | null>(null);
-    const [editingStock, setEditingStock] = useState("");
+    // Edición inline de stock por color y precio por talla (dentro del modal)
+    const [editingId, setEditingId]                   = useState<number | null>(null);
+    const [editingStock, setEditingStock]             = useState("");
+    const [editingTallaId, setEditingTallaId]         = useState<number | null>(null);
+    const [editingTallaPrecio, setEditingTallaPrecio] = useState("");
 
     // Confirmación de inactivar producto
     const [confirmInactivate, setConfirmInactivate] = useState<Product | null>(null);
@@ -268,6 +335,7 @@ export const InventoryDashboard = () => {
         setSelectedProduct(product);
         setVariants([]);
         setEditingId(null);
+        setEditingTallaId(null);
         setIsLoadingVariants(true);
         try {
             const data = await getInventoryByProduct(product.id);
@@ -283,9 +351,10 @@ export const InventoryDashboard = () => {
         setSelectedProduct(null);
         setVariants([]);
         setEditingId(null);
+        setEditingTallaId(null);
     };
 
-    // ── Ajustar stock ───────────────────────────────────────────────────────
+    // ── Ajustar stock por color/variante ───────────────────────────────────
     const handleSaveStock = async (id: number) => {
         const newStock = parseInt(editingStock, 10);
         if (isNaN(newStock) || newStock < 0) {
@@ -299,6 +368,24 @@ export const InventoryDashboard = () => {
             setEditingId(null);
         } catch {
             sileo.error({ title: "Error", description: "No se pudo actualizar el stock." });
+        }
+    };
+
+    // ── Ajustar precio por talla (aplica a todos los colores de esa talla) ─
+    const handleSavePrecio = async (tallaId: number) => {
+        const newPrecio = parseFloat(editingTallaPrecio);
+        if (isNaN(newPrecio) || newPrecio < 0) {
+            sileo.warning({ title: "Valor inválido", description: "El precio debe ser un número mayor o igual a 0." });
+            return;
+        }
+        const tallaVariants = variants.filter(v => v.tallaId === tallaId);
+        try {
+            await Promise.all(tallaVariants.map(v => updateStock(v.id, { stock: v.stock, precio: newPrecio })));
+            setVariants(prev => prev.map(v => v.tallaId === tallaId ? { ...v, precio: newPrecio } : v));
+            sileo.success({ title: "Precio actualizado", description: `S/ ${newPrecio.toFixed(2)} aplicado a la talla.` });
+            setEditingTallaId(null);
+        } catch {
+            sileo.error({ title: "Error", description: "No se pudo actualizar el precio." });
         }
     };
 
@@ -646,10 +733,16 @@ export const InventoryDashboard = () => {
                 onClose={handleCloseModal}
                 editingId={editingId}
                 editingStock={editingStock}
-                onStartEdit={(id, stock) => { setEditingId(id); setEditingStock(String(stock)); }}
-                onCancelEdit={() => setEditingId(null)}
+                onStartEditStock={(id, stock) => { setEditingId(id); setEditingStock(String(stock)); }}
+                onCancelEditStock={() => setEditingId(null)}
                 onStockChange={setEditingStock}
                 onSaveStock={handleSaveStock}
+                editingTallaId={editingTallaId}
+                editingTallaPrecio={editingTallaPrecio}
+                onStartEditPrecio={(tallaId, precio) => { setEditingTallaId(tallaId); setEditingTallaPrecio(String(precio)); }}
+                onCancelEditPrecio={() => setEditingTallaId(null)}
+                onTallaPrecioChange={setEditingTallaPrecio}
+                onSavePrecio={handleSavePrecio}
             />
 
             {/* Modal confirmar inactivar */}

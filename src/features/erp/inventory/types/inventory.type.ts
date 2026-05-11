@@ -15,10 +15,12 @@ export interface InventoryItem {
     color?: { id: number; nombre: string };
     stock: number;
     stockMinimo: number;
+    precio: number;
     createdAt: string;
     updatedAt: string;
 }
 
 export interface UpdateStockDto {
     stock: number;
+    precio?: number;
 }

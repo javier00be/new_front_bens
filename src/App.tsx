@@ -1,12 +1,14 @@
 import { AppRouter } from './routes';
 import { Toaster } from 'sileo';
 import { AuthProvider } from './contexts/AuthContext';
+import { CartProvider } from './contexts/CartContext';
 import 'sileo/styles.css';
 import './index.css';
 
 function App() {
   return (
     <AuthProvider>
+    <CartProvider>
       <Toaster position="top-center" options={{
         fill: "#171717",
         roundness: 16,
@@ -18,6 +20,7 @@ function App() {
         },
       }} />
       <AppRouter />
+    </CartProvider>
     </AuthProvider>
   );
 }

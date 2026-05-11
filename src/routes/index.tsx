@@ -19,6 +19,9 @@ import { SettingsDashboard } from "@/features/erp/settings/components/SettingsDa
 import { LoginForm } from "@/features/auth/components/LoginForm";
 import { RegisterForm } from "@/features/auth/components/RegisterForm";
 import { HomePage } from "@/pages/ecommerce/HomePage";
+import { CatalogPage }   from "@/pages/ecommerce/CatalogPage";
+import { ProductPage }   from "@/pages/ecommerce/ProductPage";
+import { CheckoutPage }  from "@/pages/ecommerce/CheckoutPage";
 
 const router = createBrowserRouter([
     // ─── Rutas Públicas — Ecommerce ───────────────────────────────────────────
@@ -26,9 +29,16 @@ const router = createBrowserRouter([
         path: "/",
         element: <StoreLayout />,
         children: [
-            { index: true, element: <HomePage /> },
+            { index: true,           element: <HomePage /> },
+            { path: "catalog",       element: <CatalogPage /> },
+            { path: "product/:id",   element: <ProductPage /> },
+            { path: "checkout",      element: <CheckoutPage /> },
         ],
     },
+
+    // ─── Auth ─────────────────────────────────────────────────────────────────
+    { path: "/login",    element: <LoginForm /> },
+    { path: "/register", element: <RegisterForm /> },
 
     // ─── Rutas Privadas — ERP ─────────────────────────────────────────────────
     {
@@ -71,9 +81,6 @@ const router = createBrowserRouter([
         ],
     },
 
-    // ─── Auth ─────────────────────────────────────────────────────────────────
-    { path: "/login",    element: <LoginForm /> },
-    { path: "/register", element: <RegisterForm /> },
     { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
