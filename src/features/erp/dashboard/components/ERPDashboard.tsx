@@ -287,7 +287,7 @@ export const ERPDashboard = () => {
                                             <Cell key={i} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(v: number, n: string) => [v, n]} />
+                                    <Tooltip formatter={(v, n) => [String(v), String(n)]} />
                                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                                 </PieChart>
                             </ResponsiveContainer>

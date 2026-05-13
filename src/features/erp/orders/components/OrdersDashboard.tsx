@@ -44,7 +44,7 @@ const OrderDetailModal = ({ order, onClose }: { order: Order; onClose: () => voi
             <div><span className="text-slate-500 text-xs">Cliente</span><p className="font-medium text-slate-800">{order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : `#${order.clienteId}`}</p></div>
             <div><span className="text-slate-500 text-xs">Origen</span><p className="font-medium text-slate-800">{order.origen}</p></div>
             <div><span className="text-slate-500 text-xs">Medio de pago</span><p className="font-medium text-slate-800">{order.medioPago?.nombre ?? "—"}</p></div>
-            <div><span className="text-slate-500 text-xs">Comprobante</span><p className="font-medium text-slate-800">{order.tipoDocumento?.abreviatura ?? "—"}</p></div>
+            <div><span className="text-slate-500 text-xs">Comprobante</span><p className="font-medium text-slate-800">{order.tipoComprobante?.abreviatura ?? "—"}</p></div>
             {order.direccionEnvio && <div className="col-span-2"><span className="text-slate-500 text-xs">Dirección</span><p className="font-medium text-slate-800">{order.direccionEnvio}</p></div>}
             {order.cupon && <div><span className="text-slate-500 text-xs">Cupón</span><p className="font-medium text-emerald-600">{order.cupon.codigo}</p></div>}
         </div>
