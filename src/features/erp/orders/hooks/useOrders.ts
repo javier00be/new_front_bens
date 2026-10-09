@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     getOrders,
     createOrder,
@@ -10,29 +10,39 @@ import type { Order, CreateOrderDto } from "../types/orders.type";
 export const useOrders = () => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => { fetchOrders(); }, []);
-
-    const fetchOrders = async () => {
+    const fetchOrders = useCallback(async () => {
         setIsLoading(true);
+        setError(null);
         try {
             const data = await getOrders();
             setOrders(data);
-        } catch (error) {
-            console.error("Error fetching orders:", error);
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Error al obtener pedidos";
+            const formatted = Array.isArray(msg) ? msg.join(", ") : msg;
+            setError(formatted);
+            console.error("Error fetching orders:", err);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const addOrder = async (dto: CreateOrderDto): Promise<Order | null> => {
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
+
+    const addOrder = async (dto: CreateOrderDto): Promise<Order> => {
+        setError(null);
         try {
             const newOrder = await createOrder(dto);
             setOrders((prev) => [newOrder, ...prev]);
             return newOrder;
-        } catch (error) {
-            console.error("Error creating order:", error);
-            return null;
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Error al crear pedido";
+            const formatted = Array.isArray(msg) ? msg.join(", ") : msg;
+            setError(formatted);
+            throw new Error(formatted);
         }
     };
 
@@ -40,27 +50,41 @@ export const useOrders = () => {
         id: number,
         medioPagoId: number,
         tipoDocumentoId?: number
-    ): Promise<Order | null> => {
+    ): Promise<Order> => {
+        setError(null);
         try {
             const updated = await confirmPayment(id, medioPagoId, tipoDocumentoId);
             setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
             return updated;
-        } catch (error) {
-            console.error("Error confirming payment:", error);
-            return null;
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Error al confirmar pago";
+            const formatted = Array.isArray(msg) ? msg.join(", ") : msg;
+            setError(formatted);
+            throw new Error(formatted);
         }
     };
 
-    const cancelO = async (id: number): Promise<Order | null> => {
+    const cancelO = async (id: number): Promise<Order> => {
+        setError(null);
         try {
             const updated = await cancelOrder(id);
             setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
             return updated;
-        } catch (error) {
-            console.error("Error cancelling order:", error);
-            return null;
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Error al cancelar pedido";
+            const formatted = Array.isArray(msg) ? msg.join(", ") : msg;
+            setError(formatted);
+            throw new Error(formatted);
         }
     };
 
-    return { orders, isLoading, fetchOrders, addOrder, payOrder, cancelOrder: cancelO };
+    return {
+        orders,
+        isLoading,
+        error,
+        fetchOrders,
+        addOrder,
+        payOrder,
+        cancelOrder: cancelO,
+    };
 };
