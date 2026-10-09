@@ -68,7 +68,7 @@ const OrderCard = ({
         <div className="flex flex-wrap gap-1.5">
             {order.detalles.slice(0, 3).map((d, i) => (
                 <span key={i} className="text-[11px] bg-slate-50 text-slate-600 px-2 py-0.5 rounded-md border border-slate-100">
-                    {d.producto?.nombre ?? `#${d.productoId}`}
+                    {d.producto?.nombre ?? "—"}
                     {d.talla && ` · ${d.talla.nombre}`}
                     {d.color && ` · ${d.color.nombre}`}
                     <span className="text-slate-400 ml-1">×{d.cantidad}</span>
