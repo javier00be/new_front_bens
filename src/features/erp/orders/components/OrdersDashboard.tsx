@@ -44,7 +44,7 @@ const OrderDetailModal = ({ order, onClose }: { order: Order; onClose: () => voi
             <div><span className="text-slate-500 text-xs">Cliente</span><p className="font-medium text-slate-800">{order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : `#${order.clienteId}`}</p></div>
             <div><span className="text-slate-500 text-xs">Origen</span><p className="font-medium text-slate-800">{order.origen}</p></div>
             <div><span className="text-slate-500 text-xs">Medio de pago</span><p className="font-medium text-slate-800">{order.medioPago?.nombre ?? "—"}</p></div>
-            <div><span className="text-slate-500 text-xs">Comprobante</span><p className="font-medium text-slate-800">{order.tipoDocumento?.abreviatura ?? "—"}</p></div>
+            <div><span className="text-slate-500 text-xs">Comprobante</span><p className="font-medium text-slate-800">{order.tipoComprobante?.abreviatura ?? "—"}</p></div>
             {order.direccionEnvio && <div className="col-span-2"><span className="text-slate-500 text-xs">Dirección</span><p className="font-medium text-slate-800">{order.direccionEnvio}</p></div>}
             {order.cupon && <div><span className="text-slate-500 text-xs">Cupón</span><p className="font-medium text-emerald-600">{order.cupon.codigo}</p></div>}
         </div>
@@ -148,38 +148,40 @@ export const OrdersDashboard = () => {
     }, []);
 
     const handleCreate = async (dto: CreateOrderDto) => {
-        const result = await addOrder(dto);
-        if (result) {
+        try {
+            const result = await addOrder(dto);
             sileo.success({ title: "Pedido creado", description: `Pedido #${result.id} registrado correctamente.` });
             setIsCreateOpen(false);
-        } else {
-            sileo.error({ title: "Error", description: "No se pudo crear el pedido." });
+        } catch (err: any) {
+            sileo.error({ title: "Error", description: err?.message || "No se pudo crear el pedido." });
         }
     };
 
     const handlePay = async (medioPagoId: number) => {
         if (!payingOrder) return;
         setActionLoading(true);
-        const result = await payOrder(payingOrder.id, medioPagoId);
-        setActionLoading(false);
-        if (result) {
-            sileo.success({ title: "Pago confirmado", description: `Pedido #${payingOrder.id} marcado como PAGADO. Venta generada.` });
+        try {
+            const result = await payOrder(payingOrder.id, medioPagoId);
+            sileo.success({ title: "Pago confirmado", description: `Pedido #${result.id} marcado como PAGADO. Venta generada.` });
             setPayingOrder(null);
-        } else {
-            sileo.error({ title: "Error", description: "No se pudo confirmar el pago." });
+        } catch (err: any) {
+            sileo.error({ title: "Error", description: err?.message || "No se pudo confirmar el pago." });
+        } finally {
+            setActionLoading(false);
         }
     };
 
     const handleCancel = async () => {
         if (!cancelingId) return;
         setActionLoading(true);
-        const result = await cancelOrder(cancelingId);
-        setActionLoading(false);
-        if (result) {
+        try {
+            await cancelOrder(cancelingId);
             sileo.success({ title: "Pedido cancelado", description: `Pedido #${cancelingId} cancelado. Stock devuelto.` });
             setCancelingId(null);
-        } else {
-            sileo.error({ title: "Error", description: "No se pudo cancelar el pedido." });
+        } catch (err: any) {
+            sileo.error({ title: "Error", description: err?.message || "No se pudo cancelar el pedido." });
+        } finally {
+            setActionLoading(false);
         }
     };
 
