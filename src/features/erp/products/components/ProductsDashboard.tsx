@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { GenericModal } from "@/components/shared/GenericModal";
 import { HexColorPicker } from "react-colorful";
-import { X, Plus, Image as ImageIcon, Upload, Trash2, RefreshCw, ArrowLeft } from "lucide-react";
+import { X, Plus, Image as ImageIcon, Upload, Trash2, RefreshCw, ArrowLeft, Video, FileText } from "lucide-react";
 import { sileo } from "sileo";
 
 import { useCategories } from "../hooks/useCategories";
@@ -49,6 +49,13 @@ export const ProductsDashboard = () => {
     const [currentColor, setCurrentColor] = useState("#6366f1");
     const [selectedTallas, setSelectedTallas] = useState<string[]>([]);
     const [imagenes, setImagenes]         = useState<(string | null)[]>([null, null, null, null]);
+    // Ficha técnica & Multimedia
+    const [modelo, setModelo]             = useState("");
+    const [entalle, setEntalle]           = useState("MODERN FIT");
+    const [composicion, setComposicion]   = useState("100% ALGODÓN");
+    const [hechoEn, setHechoEn]           = useState("PERÚ");
+    const [cuidado, setCuidado]           = useState("LAVAR SOLO A MANO, NO USAR BLANQUEADOR, SECAR TENDIDO SIN ESCURRIR, PLANCHA TEMPERATURA MÁX. 110 °C, NO LAVAR EN SECO.");
+    const [videoUrl, setVideoUrl]         = useState("");
 
     // ── Quick-add modal ───────────────────────────────────────────────────────
     const [modalType, setModalType]       = useState<ModalType>(null);
@@ -78,6 +85,12 @@ export const ProductsDashboard = () => {
                 const slots: (string | null)[] = [null, null, null, null];
                 (p.imagenes ?? []).slice(0, 4).forEach((url, i) => { slots[i] = url; });
                 setImagenes(slots);
+                setModelo(p.modelo ?? "");
+                setEntalle(p.entalle ?? "MODERN FIT");
+                setComposicion(p.composicion ?? "100% ALGODÓN");
+                setHechoEn(p.hechoEn ?? "PERÚ");
+                setCuidado(p.cuidado ?? "LAVAR SOLO A MANO, NO USAR BLANQUEADOR, SECAR TENDIDO SIN ESCURRIR, PLANCHA TEMPERATURA MÁX. 110 °C, NO LAVAR EN SECO.");
+                setVideoUrl(p.videoUrl ?? "");
             } catch {
                 sileo.error({ title: "Error", description: "No se pudo cargar el producto." });
                 navigate("/admin/inventory");
@@ -95,6 +108,9 @@ export const ProductsDashboard = () => {
         setAplicaDescuento(false); setTipoDesc("PORCENTAJE"); setValorDesc("");
         setSelectedColors([]); setSelectedTallas([]);
         setImagenes([null, null, null, null]);
+        setModelo(""); setEntalle("MODERN FIT"); setComposicion("100% ALGODÓN");
+        setHechoEn("PERÚ"); setCuidado("LAVAR SOLO A MANO, NO USAR BLANQUEADOR, SECAR TENDIDO SIN ESCURRIR, PLANCHA TEMPERATURA MÁX. 110 °C, NO LAVAR EN SECO.");
+        setVideoUrl("");
     };
 
     const openModal = (type: ModalType) => { setNewItemName(""); setModalType(type); };
@@ -166,6 +182,12 @@ export const ProductsDashboard = () => {
             descripcion:    descripcion.trim() || undefined,
             tipoDescuento:  aplicaDescuento ? tipoDesc : "SIN_DESCUENTO",
             valorDescuento: aplicaDescuento ? parseFloat(valorDesc) || 0 : 0,
+            modelo:         modelo.trim() || undefined,
+            entalle:        entalle.trim() || undefined,
+            composicion:    composicion.trim() || undefined,
+            hechoEn:        hechoEn.trim() || undefined,
+            cuidado:        cuidado.trim() || undefined,
+            videoUrl:       videoUrl.trim() || undefined,
         };
         setIsSaving(true);
         try {
@@ -423,6 +445,83 @@ export const ProductsDashboard = () => {
                                         </button>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Ficha Técnica & Multimedia */}
+                            <div className="pt-5 border-t space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-primary" />
+                                    <Label className="text-base font-semibold">Ficha Técnica & Video Reel</Label>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="modelo" className="text-xs text-slate-600">Modelo / Código de Línea</Label>
+                                        <Input
+                                            id="modelo"
+                                            placeholder="Ej. 9CY734"
+                                            value={modelo}
+                                            onChange={e => setModelo(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="entalle" className="text-xs text-slate-600">Entalle</Label>
+                                        <Input
+                                            id="entalle"
+                                            placeholder="Ej. MODERN FIT, SLIM FIT, REGULAR FIT..."
+                                            value={entalle}
+                                            onChange={e => setEntalle(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="composicion" className="text-xs text-slate-600">Composición</Label>
+                                        <Input
+                                            id="composicion"
+                                            placeholder="Ej. 100% ALGODÓN"
+                                            value={composicion}
+                                            onChange={e => setComposicion(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="hechoEn" className="text-xs text-slate-600">Hecho en / Origen</Label>
+                                        <Input
+                                            id="hechoEn"
+                                            placeholder="Ej. PERÚ, R.P.C."
+                                            value={hechoEn}
+                                            onChange={e => setHechoEn(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="cuidado" className="text-xs text-slate-600">Instrucciones de Cuidado / Lavado</Label>
+                                    <Textarea
+                                        id="cuidado"
+                                        placeholder="Ej. LAVAR SOLO A MANO, NO USAR BLANQUEADOR, SECAR TENDIDO SIN ESCURRIR..."
+                                        className="resize-none h-16 text-xs"
+                                        value={cuidado}
+                                        onChange={e => setCuidado(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <Video className="w-3.5 h-3.5 text-primary" />
+                                        <Label htmlFor="videoUrl" className="text-xs text-slate-600">Video Reel (TikTok / Shorts / MP4 URL)</Label>
+                                    </div>
+                                    <Input
+                                        id="videoUrl"
+                                        placeholder="https://... enlace de video o reel"
+                                        value={videoUrl}
+                                        onChange={e => setVideoUrl(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-slate-400">
+                                        Se mostrará como video interactivo al costado de la Ficha Técnica en la página del producto.
+                                    </p>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

@@ -30,6 +30,12 @@ function decodeToken(token: string): AuthUser | null {
     try {
         const payload = token.split(".")[1];
         const decoded = JSON.parse(atob(payload));
+
+        // Validar expiración del token (exp está en segundos)
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+            return null;
+        }
+
         return { id: decoded.sub, correo: decoded.correo, rol: decoded.rol, clienteId: decoded.clienteId ?? null };
     } catch {
         return null;
@@ -44,9 +50,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const token = localStorage.getItem("erp_token");
         if (token) {
             const decoded = decodeToken(token);
-            setUser(decoded);
+            if (decoded) {
+                setUser(decoded);
+            } else {
+                // Token expirado o inválido: eliminarlo inmediatamente
+                localStorage.removeItem("erp_token");
+                setUser(null);
+            }
         }
         setIsLoading(false);
+
+        const handleUnauthorized = () => {
+            setUser(null);
+        };
+
+        window.addEventListener("auth:unauthorized", handleUnauthorized);
+        return () => {
+            window.removeEventListener("auth:unauthorized", handleUnauthorized);
+        };
     }, []);
 
     const login = async (correo: string, password: string) => {

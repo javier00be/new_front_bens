@@ -5,6 +5,7 @@ import { getAllProducts } from "@/features/erp/products/services/products.servic
 import { getCategories }  from "@/features/erp/products/services/categories.service";
 import type { Product }   from "@/features/erp/products/types/Products.type";
 import { useCart }        from "@/contexts/CartContext";
+import { useFavorites }   from "@/contexts/FavoritesContext";
 import modelGalata    from "../../assets/images/clothes/model_galata.png";
 import frontGalaBeige from "../../assets/images/gala/front_gala_beige.png";
 import galaAzul       from "../../assets/images/gala/gala_azul.png";
@@ -63,7 +64,8 @@ const StarRating = ({ rating }: { rating: number }) => (
 // ─── Product Card ─────────────────────────────────────────────────────────────
 
 const ProductCard = ({ product }: { product: Product }) => {
-    const [wished,  setWished]  = useState(false);
+    const { isFavorite, toggleFavorite } = useFavorites();
+    const wished = isFavorite(product.id);
     const { addItem } = useCart();
     const navigate    = useNavigate();
 
@@ -96,8 +98,12 @@ const ProductCard = ({ product }: { product: Product }) => {
                 </span>
             )}
             <button
-                onClick={e => { e.preventDefault(); setWished(w => !w); }}
-                className="absolute top-3 right-3 z-10 w-8 h-8 bg-white/90 rounded-full shadow flex items-center justify-center transition-transform hover:scale-110"
+                onClick={e => {
+                    e.preventDefault();
+                    toggleFavorite(product.id);
+                }}
+                className="absolute top-3 right-3 z-10 w-8 h-8 bg-white/90 rounded-full shadow flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+                title={wished ? "Quitar de favoritos" : "Guardar en favoritos"}
             >
                 <Heart size={14} className={wished ? "fill-rose-500 text-rose-500" : "text-slate-400"} />
             </button>

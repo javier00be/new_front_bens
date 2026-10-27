@@ -22,6 +22,8 @@ import { HomePage } from "@/pages/ecommerce/HomePage";
 import { CatalogPage }   from "@/pages/ecommerce/CatalogPage";
 import { ProductPage }   from "@/pages/ecommerce/ProductPage";
 import { CheckoutPage }  from "@/pages/ecommerce/CheckoutPage";
+import { FavoritesPage } from "@/pages/ecommerce/FavoritesPage";
+import { ProfilePage }   from "@/pages/ecommerce/ProfilePage";
 
 const router = createBrowserRouter([
     // ─── Rutas Públicas — Ecommerce ───────────────────────────────────────────
@@ -33,6 +35,10 @@ const router = createBrowserRouter([
             { path: "catalog",       element: <CatalogPage /> },
             { path: "product/:id",   element: <ProductPage /> },
             { path: "checkout",      element: <CheckoutPage /> },
+            { path: "favorites",     element: <FavoritesPage /> },
+            { path: "favoritos",     element: <FavoritesPage /> },
+            { path: "profile",       element: <ProfilePage /> },
+            { path: "perfil",        element: <ProfilePage /> },
         ],
     },
 

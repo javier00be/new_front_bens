@@ -41,6 +41,12 @@ export interface Product {
     valorDescuento: number;
     categoria?: { id: number; nombre: string };
     marca?: { id: number; nombre: string };
+    modelo?: string;
+    entalle?: string;
+    composicion?: string;
+    hechoEn?: string;
+    cuidado?: string;
+    videoUrl?: string;
     createdAt?: string;
     updatedAt?: string;
     estado?: string;
@@ -59,4 +65,10 @@ export interface CreateProductDto {
     estado?:        string;
     tipoDescuento:  TipoDescuento;
     valorDescuento: number;
+    modelo?:        string;
+    entalle?:       string;
+    composicion?:   string;
+    hechoEn?:       string;
+    cuidado?:       string;
+    videoUrl?:      string;
 }
